@@ -68,8 +68,8 @@ class TestBudgetTheorem(unittest.TestCase):
         budget = ResourceBudget(0, 10.0, 1000000)
         self.assertFalse(budget.consume(1))
     
-    def test_budget_negative_consume_ignored(self):
-        """Test consuming zero operations."""
+    def test_budget_zero_consume(self):
+        """Test consuming zero operations has no effect."""
         budget = ResourceBudget(100, 10.0, 1000000)
         initial = budget.operations_used
         budget.consume(0)
