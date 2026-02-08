@@ -12,7 +12,7 @@ Current AI agent frameworks enforce safety through prompts ("please don't do any
 
 These guarantees hold under the following assumptions:
 
-- **The LLM is untrusted.** It can hallucinate, lie, try to game metrics, or return garbage. ConstrAI treats it as a stochastic adversary.
+- **The LLM is untrusted.** It can hallucinate, lie, try to game metrics, or return garbage. ConstrAI treats it as potentially unreliable.
 - **The ConstrAI kernel is trusted.** If an attacker has write access to the kernel code itself, all bets are off. This is the same assumption operating systems make about the kernel.
 - **ActionSpecs are human-authored and correct.** If the spec says "create file" but the real command deletes things, the kernel protects the model, not the system. Environment reconciliation catches this for probed variables only.
 - **Single-agent, single-process.** Concurrent access is protected by locks, but multi-agent coordination across processes is not implemented.
@@ -22,7 +22,7 @@ If any of these assumptions are violated, specific guarantees degrade. See [VULN
 
 ## Core Guarantees
 
-7 theorems, enforced by construction. Each has a proof in [THEOREMS.md](docs/THEOREMS.md).
+7 theorems, enforced by construction. Proofs in [THEOREMS.md](docs/THEOREMS.md).
 
 | # | Theorem | Statement | Proof technique |
 |---|---------|-----------|-----------------|
@@ -36,15 +36,15 @@ If any of these assumptions are violated, specific guarantees degrade. See [VULN
 
 **Conditional guarantees** (hold if probes/attestors are correct): temporal dependencies, environment reconciliation, goal attestation.
 
-**Empirical claims** (measured, not proven): multi-dimensional attestation is harder to game; dynamic dependency discovery reduces failures.
+**Empirical claims** (measured but not yet proven): multi-dimensional attestation is harder to game; dynamic dependency discovery reduces failures.
 
 ## Architecture
 
 ```
 ┌─────────────────────────────────────────────┐
-│                Orchestrator                  │
+│                Orchestrator                 │
 │  ┌───────────────────────────────────────┐  │
-│  │ LLM (pluggable: Claude, GPT, local)  │  │
+│  │ LLM (pluggable: Claude, GPT, local)   │  │
 │  │  Receives: structured decision prompt │  │
 │  │  Returns: JSON action selection       │  │
 │  ├───────────────────────────────────────┤  │
@@ -121,7 +121,7 @@ engine = Orchestrator(task, llm=MyLLM())
 
 See `examples/claude_integration.py` for a working Anthropic Claude adapter.
 
-## How the kernel works (30-second version)
+## TL;DR How the kernel works
 
 1. LLM selects an action (from structured prompt with pre-computed values)
 2. Kernel **simulates** the action on an immutable copy of state
