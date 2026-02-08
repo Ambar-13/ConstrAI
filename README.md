@@ -156,7 +156,7 @@ The chaos fuzzer tests: hallucinated actions, budget overflow, invariant evasion
 ## Project structure
 
 ```
-constrai/
+ConstrAI/
 ├── constrai/
 │   ├── __init__.py          Public API
 │   ├── formal.py            Safety kernel, state, effects, theorems T1–T7
