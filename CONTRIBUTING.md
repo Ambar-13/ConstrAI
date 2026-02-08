@@ -27,6 +27,7 @@ All 155 tests must pass. No exceptions.
 **Good first issues:**
 - Add more domain examples (file operations, API orchestration, CI/CD pipelines) in `examples/`
 - Improve docstrings or fix typos in `docs/`
+- Make the docs more comprehensive
 - Write additional chaos fuzzer attack vectors in `tests/chaos_fuzzer.py`
 
 **Medium:**
@@ -38,6 +39,7 @@ All 155 tests must pass. No exceptions.
 - Multi-agent coordination layer
 - Formal proof document (Lean4 or Coq formalization of T1–T7)
 - Real LLM adapter testing and benchmarks (Claude, GPT-4, local models)
+- Add Dynamic cost / weighted allocation (where expensive LLM calls get more tokens/budget proportionally)
 - Distributed locking for concurrent agent access
 
 ## How to submit
@@ -71,4 +73,4 @@ Keep PRs focused. One fix or feature per PR is easier to review than a big batch
 
 ## Questions?
 
-Open an issue. There's no question too basic.
+Open an issue. There's no question too basic. Feel free to discuss!
