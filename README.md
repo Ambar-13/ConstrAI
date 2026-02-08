@@ -16,7 +16,7 @@ These guarantees hold under the following assumptions:
 - **The ConstrAI kernel is trusted.** If an attacker has write access to the kernel code itself, all bets are off. This is the same assumption operating systems make about the kernel.
 - **ActionSpecs are human-authored and correct.** If the spec says "create file" but the real command deletes things, the kernel protects the model, not the system. Environment reconciliation catches this for probed variables only.
 - **Single-agent, single-process.** Concurrent access is protected by locks, but multi-agent coordination across processes is not implemented.
-- **Budget arithmetic is exact.** Internally uses integer millicents (×100,000) to eliminate floating-point drift.
+- **Budget check.** All budget checks are done before execution (with invariant checks happening on a simulated state).
 
 If any of these assumptions are violated, specific guarantees degrade. See [VULNERABILITIES.md](docs/VULNERABILITIES.md) for the full breakdown.
 
