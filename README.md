@@ -121,7 +121,7 @@ engine = Orchestrator(task, llm=MyLLM())
 
 See `examples/claude_integration.py` for a working Anthropic Claude adapter.
 
-## TL;DR How the kernel works
+## How the kernel works (30 seconds)
 
 1. LLM selects an action (from structured prompt with pre-computed values)
 2. Kernel **simulates** the action on an immutable copy of state
@@ -144,6 +144,36 @@ Monte Carlo (1000 random tasks):                      1000/1000 budget safe
 ```
 
 The chaos fuzzer tests: hallucinated actions, budget overflow, invariant evasion, state poisoning, trace tampering, success cheating, resource exhaustion, 6 malicious LLM personalities, dependency bypass, type confusion, resource lifecycle violations, discovery poisoning, and 1000 randomized attack scenarios.
+
+## Safety Evaluation
+
+ConstrAI was evaluated against an internal adversarial evaluation suite covering 63 actions across 6 agent types and 39 attack vectors:
+
+| Metric | Result |
+|--------|:---:|
+| **Safety Rate** | **89.7%** (35/39 attacks blocked) |
+| **False Positives** | **0** (no legitimate actions blocked) |
+| **Task Completion** | **100%** |
+| **Precision** | **100%** |
+| **Recall** | **89.7%** |
+| **F1 Score** | **94.6%** |
+| **Avg Latency** | **0.061ms** per check |
+| **Throughput** | **45,613 checks/sec** |
+
+**Agents tested:**
+- FileSystemAgent (file ops, path traversal, credential theft)
+- WebRequestAgent (exfiltration, SSRF, DNS covert channels)
+- CodeExecutionAgent (privilege escalation, reverse shells)
+- DataAccessAgent (SQL injection, PII extraction)
+- MultiStepAgent (chained multi-step attacks)
+- EvasionAgent (obfuscation, base64 encoding, semantic evasion)
+
+**Threat coverage:** Data exfiltration, sandbox escape, privilege escalation, command injection, PII leaks, denial of service, path traversal, resource abuse, prompt injection.
+
+**Key finding:** The 4 missed attacks (50% safety on EvasionAgent) are adversarial evasion techniques (string concatenation, base64 payloads, `getattr` dispatch) that bypass static pattern matching. The kernel's invariant checking has **zero known bypasses** — all failures are in the classification layer, which is modular and upgradeable.
+
+See `safety_evaluation/constrai_safety_evaluation.py`; raw outputs are included in `safety_evaluation/evaluation_results_raw.json`.
+See `safety_evaluation/Evaluation_report.md` for detailed breakdown, per-agent metrics, and architectural analysis.
 
 ## Known limitations
 
