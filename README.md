@@ -228,3 +228,21 @@ pip install -e ".[anthropic]"        # With Claude support
 ## License
 
 MIT
+
+## Citation
+
+To cite ConstrAI in your work:
+
+**BibTeX:**
+
+```bibtex
+@misc{ambar2026constrai,
+    title = {ConstrAI: Formal safety framework for AI agents},
+    author = {Ambar},
+    year = {2026},
+    howpublished = {\url{https://github.com/Ambar-13/ConstrAI}},
+    note = {Version 0.2.0}
+}
+```
+
+Affiliation: National University of Singapore (NUS)

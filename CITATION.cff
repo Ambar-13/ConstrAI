@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use ConstrAI in your research, please cite it as below."
+title: "ConstrAI: Mathematical Safety Constraints for Autonomous AI Agents"
+type: software
+authors:
+  - given-names: Ambar
+    affiliation: "National University of Singapore"
+    orcid: ""
+version: "0.2.0"
+date-released: "2026-02-08"
+license: MIT
+url: "https://github.com/Ambar-13/ConstrAI"
+repository-code: "https://github.com/Ambar-13/ConstrAI"
+description: >-
+  A formal safety framework for AI agents that enforces
+  mathematical invariants through state-transition simulation rather
+  than prompt-based guardrails. Provides seven proven safety theorems
+  (budget safety, termination, invariant preservation, monotone resources,
+  atomicity, trace integrity, rollback exactness) enforced by a
+  non-bypassable safety kernel. Evaluated against synthetic agent, modeling
+  realistic LLM decision behavior on 63 actions across 9 threat categories
+  with 89.7% recall and zero false positives at sub-millisecond latency
+  (45,000+ checks/sec).
+keywords:
+  - ai-safety
+  - agent-safety-framework
+  - agentic-ai-safety
+  - agentic-ai-automation
+  - formal-verification
+  - autonomous-agents
+  - invariant-checking
+  - llm-safety
+  - mathematical-constraints
+license: "MIT"
