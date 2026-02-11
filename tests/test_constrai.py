@@ -116,6 +116,20 @@ kernel_bad = SafetyKernel(budget=100.0, invariants=[bad_inv])
 v = kernel_bad.evaluate(State({}), inc)
 T.check("T3.8 exception = violation", not v.approved)
 
+monitor_only = Invariant(
+    "monitor_only",
+    lambda s: False,
+    "Should be logged but not block",
+    severity="warning",  # back-compat: warning => monitoring
+)
+kernel_monitor = SafetyKernel(budget=100.0, invariants=[monitor_only])
+v = kernel_monitor.evaluate(State({"n": 0}), inc)
+T.check("T3.9 monitoring invariant does not block", v.approved)
+T.check(
+    "T3.10 monitoring invariant recorded as FAIL_INVARIANT",
+    any(result == CheckResult.FAIL_INVARIANT for _, result, _ in v.checks),
+)
+
 # ═══ §4 T4: Monotone Spend ═══
 print("\n§4  T4: Monotone Spend")
 print("-" * 40)
@@ -442,6 +456,20 @@ c = (gr + z**2/(2*N)) / d
 m = z * math.sqrt((gr*(1-gr) + z**2/(4*N))/N) / d
 print(f"       Goal rate 95% CI: [{c-m:.3f}, {c+m:.3f}]")
 
-# ═══ SUMMARY ═══
-all_ok = T.summary()
-sys.exit(0 if all_ok else 1)
+def _run_suite() -> bool:
+    """Run the historical script-style test suite and return pass/fail.
+
+    This file originally functioned as a standalone script.
+    Under pytest, the module is imported, so we must not call sys.exit()
+    at import time.
+    """
+    return T.summary()
+
+
+def test_script_suite_passes():
+    assert _run_suite(), "Script-style suite reported failures; see captured output above."
+
+
+if __name__ == "__main__":
+    all_ok = _run_suite()
+    sys.exit(0 if all_ok else 1)

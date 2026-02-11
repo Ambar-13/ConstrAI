@@ -2,6 +2,8 @@
 
 Thanks for wanting to contribute. Here's how to get started.
 
+**Maintainer:** Ambar (ambar13@u.nus.edu)
+
 ## Setup
 
 ```bash

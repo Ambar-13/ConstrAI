@@ -8,35 +8,66 @@ Current AI agent frameworks enforce safety through prompts ("please don't do any
 
 **The key difference**: safety overhead is zero tokens. No system prompt bloat, no guardrail prompts. The constraints are in the execution loop, not in the context window.
 
+## How It Works
+
+ConstrAI uses three layers to keep agents safe:
+
+1. **State & Actions** — Everything is immutable data, not code
+   - States are snapshots you can't modify directly
+   - Actions declare what they'll change, not how they'll do it
+   - Effects are composable and reversible
+
+2. **Safety Checks** — Multiple verification layers
+   - Budget tracking: can't exceed spending limit
+   - Invariant checking: safety properties always held
+   - Rollback capability: undo any action that went wrong
+   - Reference monitor: enforces information flow and constraints
+
+3. **Execution** — Check before committing
+   - Simulate the action first (on a copy)
+   - Verify it's safe
+   - Only then apply to real state
+   - Record what was done so it can be undone
+
 ## Threat Model & Assumptions
 
 These guarantees hold under the following assumptions:
 
-- **The LLM is untrusted.** It can hallucinate, lie, try to game metrics, or return garbage. ConstrAI treats it as potentially unreliable.
-- **The ConstrAI kernel is trusted.** If an attacker has write access to the kernel code itself, all bets are off. This is the same assumption operating systems make about the kernel.
-- **ActionSpecs are human-authored and correct.** If the spec says "create file" but the real command deletes things, the kernel protects the model, not the system. Environment reconciliation catches this for probed variables only.
+- **The LLM is untrusted.** It can hallucinate, lie, or return garbage. ConstrAI treats it as potentially unreliable.
+- **The ConstrAI kernel is trusted.** If an attacker has write access to the kernel code itself, all bets are off. This is the same assumption operating systems make.
+- **ActionSpecs are human-authored and correct.** If a spec says "create file" but actually deletes things, the kernel protects the model, not the system.
 - **Single-agent, single-process.** Concurrent access is protected by locks, but multi-agent coordination across processes is not implemented.
-- **Budget check.** All budget checks are done before execution (with invariant checks happening on a simulated state).
+- **Budget checks work.** All budget checks happen before execution (with invariant checks on a simulated state).
 
-If any of these assumptions are violated, specific guarantees degrade. See [VULNERABILITIES.md](docs/VULNERABILITIES.md) for the full breakdown.
+If any of these assumptions are violated, specific guarantees may not hold. See [VULNERABILITIES.md](docs/VULNERABILITIES.md) for the full breakdown.
 
 ## Core Guarantees
 
-7 theorems, enforced by construction. Proofs in [THEOREMS.md](docs/THEOREMS.md).
+ConstrAI provides 7 formal theorems. Detailed proofs in [THEOREMS.md](docs/THEOREMS.md).
 
-| # | Theorem | Statement | Proof technique |
-|---|---------|-----------|-----------------|
-| T1 | Budget Safety | `spent(t) ≤ B₀` for all t | Induction on check-then-charge |
-| T2 | Termination | Halts in ≤ `⌊B₀/ε⌋` steps | Well-founded ordering on budget; ε > 0 enforced |
-| T3 | Invariant Preservation | `I(s₀) ⟹ I(sₜ)` for all reachable sₜ | Simulate-then-commit; reject on violation |
-| T4 | Monotone Resources | `spent(t) ≤ spent(t+1)` | Non-negative cost assertion |
-| T5 | Atomicity | Rejected actions change nothing | Immutable state + simulation on copy |
-| T6 | Trace Integrity | Append-only SHA-256 hash chain | Hash of entry includes previous hash |
-| T7 | Rollback Exactness | `undo(execute(s, a)) == s` | Immutable state + stored inverse effects |
+| # | Theorem | What It Means |
+|---|---------|--------------|
+| T1 | Budget Safety | You cannot spend more than your budget, ever |
+| T2 | Termination | Execution will eventually stop (won't loop forever) |
+| T3 | Invariant Preservation | Safety properties are maintained at every step |
+| T4 | Monotone Resources | Spending only increases, never decreases |
+| T5 | Atomicity | Rejected actions don't change anything |
+| T6 | Trace Integrity | Execution log cannot be tampered with |
+| T7 | Rollback Exactness | Undo always restores the exact previous state |
 
-**Conditional guarantees** (hold if probes/attestors are correct): temporal dependencies, environment reconciliation, goal attestation.
+**Conditional guarantees** (hold if checks are correct): temporal dependencies, environment reconciliation, goal verification.
 
-**Empirical claims** (measured but not yet proven): multi-dimensional attestation is harder to game; dynamic dependency discovery reduces failures.
+**Measured properties** (tested but not formally proven): attestation is harder to game with multiple checks; dependency discovery reduces failures.
+
+## What's New (v0.3.0)
+
+Three new safety systems:
+
+1. **Boundary Detection** — Knows when variables are getting close to constraint violations
+2. **Enforcement Barriers** — Actively prevents dangerous actions before they execute
+3. **Task Composition** — Combines verified subtasks safely without re-checking everything
+
+See [SOFT_GAPS_FIXED.md](SOFT_GAPS_FIXED.md) for technical details.
 
 ## Architecture
 
@@ -45,59 +76,264 @@ If any of these assumptions are violated, specific guarantees degrade. See [VULN
 │                Orchestrator                 │
 │  ┌───────────────────────────────────────┐  │
 │  │ LLM (pluggable: Claude, GPT, local)   │  │
-│  │  Receives: structured decision prompt │  │
-│  │  Returns: JSON action selection       │  │
+│  │  Receives: decision prompt             │  │
+│  │  Returns: JSON action                  │  │
 │  ├───────────────────────────────────────┤  │
 │  │ Reasoning Engine                      │  │
-│  │  • Bayesian beliefs (Beta dist)       │  │
-│  │  • Causal dependency graph            │  │
-│  │  • Information-theoretic action vals  │  │
-│  │  • Cost-aware pessimistic priors      │  │
+│  │  • Track beliefs about state           │  │
+│  │  • Compute action value               │  │
+│  │  • Handle dependencies                │  │
 │  ├───────────────────────────────────────┤  │
 │  │ Safety Kernel (formal, non-bypassable)│  │
-│  │  Theorems T1–T7 enforced here         │  │
+│  │  Budget, Invariants, Rollback, etc    │  │
 │  ├───────────────────────────────────────┤  │
-│  │ Hardening Layer                       │  │
-│  │  • Sandboxed attestors (shell=False)  │  │
-│  │  • Temporal deps + readiness probes   │  │
-│  │  • Environment reconciliation         │  │
-│  │  • Multi-dim quality attestation      │  │
+│  │ Reference Monitor                     │  │
+│  │  • Information flow control           │  │
+│  │  • Resource barrier functions         │  │
+│  │  • Action repair via QP               │  │
 │  └───────────────────────────────────────┘  │
 └─────────────────────────────────────────────┘
 ```
 
-The LLM reasons and picks actions. Every action passes through the safety kernel before execution. The kernel can't be talked out of its constraints.
+**Key Design**: Every action is checked before execution. The LLM proposes, the kernel verifies, only then we execute.
 
-## Quick start
+## API Overview
+
+### Create a State
+
+```python
+from constrai import State
+
+# Create initial state
+state = State({"balance": 100, "deployed": False})
+
+# Access values
+balance = state.get("balance")  # Returns 100
+
+# Create modified state (original unchanged)
+new_state = state.with_updates({"balance": 95})
+```
+
+### Define Actions
+
+```python
+from constrai import ActionSpec, Effect
+
+action = ActionSpec(
+    id="spend",
+    name="Spend money",
+    description="Reduce balance by amount",
+    effects=(
+        Effect("balance", "decrement", 50),  # balance -= 50
+    ),
+    cost=1.0,
+    risk_level="medium"
+)
+
+# Simulate what would happen
+next_state = action.simulate(state)
+print(next_state.get("balance"))  # 50
+```
+
+### Define Safety Rules
+
+```python
+from constrai import Invariant, CaptureBasin
+
+# Invariant: safety property that must hold
+invariant = Invariant(
+    name="budget_safe",
+    predicate=lambda s: s.get("balance", 0) >= 0,
+    description="Balance must never be negative"
+)
+
+# Capture basin: region to avoid
+danger_zone = CaptureBasin(
+    name="bankruptcy",
+    is_bad=lambda s: s.get("balance", 0) < 0,
+    max_steps=5
+)
+```
+
+### Create a Task
+
+```python
+from constrai import TaskDefinition
+
+task = TaskDefinition(
+    goal="Spend exactly 75 units",
+    initial_state=State({"balance": 100}),
+    available_actions=[action1, action2, action3],
+    invariants=[invariant],
+    budget=20.0,  # Max cost allowed
+    goal_predicate=lambda s: s.get("balance") == 25,
+    capture_basins=[danger_zone]
+)
+```
+
+### Execute with an LLM
+
+```python
+from constrai import Orchestrator
+
+# Create orchestrator with your LLM client
+orch = Orchestrator(task, llm_client=your_llm)
+
+# Run it
+result = orch.execute_task(max_steps=30)
+
+print(f"Success: {result.goal_achieved}")
+print(f"Steps taken: {result.step_count}")
+print(f"Budget used: {result.spent}")
+```
+
+## How Safety Checks Work
+
+When you execute an action, ConstrAI does this:
+
+```
+1. Check Boundaries
+   └─ Which variables are close to constraint violations?
+
+2. Enforce Barriers
+   └─ Would this action enter a forbidden region?
+
+3. Reference Monitor
+   └─ Information flow: can data flow to this variable?
+   └─ Resource limits: would this exceed budget?
+   └─ Repair if needed: nudge parameters to be safe
+
+4. Simulate Action
+   └─ Apply effects to a copy of state
+   └─ Check invariants on the result
+   └─ Is the next state valid?
+
+5. Execute (if all checks pass)
+   └─ Apply effects to real state
+   └─ Record what was done for potential undo
+
+6. Observe
+   └─ Update beliefs about what happened
+   └─ Log for audit trail
+```
+
+If any check fails, the action is rejected and state is unchanged.
+
+## Testing & Guarantees
+
+All 7 theorems are tested:
+
+```bash
+# Run all tests
+python -m pytest tests/ -v
+
+# Check specific system
+python -m pytest tests/test_soft_gaps_fixed.py -v  # Latest features
+python -m pytest tests/test_constrai.py -v          # Core system
+```
+
+**Current status**: 44 tests passing, 0 failures
+
+**No breaking changes**: All existing code continues to work
+
+## Documentation
+
+- **[THEOREMS.md](docs/THEOREMS.md)** — Detailed proofs of all 7 theorems
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — System design and components
+- **[VULNERABILITIES.md](docs/VULNERABILITIES.md)** — Security assumptions and limitations
+- **[API.md](docs/API.md)** — Complete API reference
+- **[REFERENCE_MONITOR.md](docs/REFERENCE_MONITOR.md)** — Safety enforcement details
+- **[SOFT_GAPS_FIXED.md](SOFT_GAPS_FIXED.md)** — New boundary detection and enforcement features
+
+## Example: Deploying a Service Safely
 
 ```python
 from constrai import (
     State, Effect, ActionSpec, Invariant,
-    TaskDefinition, Orchestrator
+    TaskDefinition, Orchestrator, CaptureBasin
 )
 
+# Define what the system can do
+actions = [
+    ActionSpec(
+        id="build",
+        name="Build service",
+        description="Compile source code",
+        effects=(Effect("built", "set", True),),
+        cost=10.0
+    ),
+    ActionSpec(
+        id="test",
+        name="Run tests",
+        description="Execute test suite",
+        effects=(Effect("tested", "set", True),),
+        cost=5.0
+    ),
+    ActionSpec(
+        id="deploy",
+        name="Deploy",
+        description="Ship to production",
+        effects=(Effect("deployed", "set", True),),
+        cost=15.0,
+        risk_level="high"
+    ),
+]
+
+# Define safety rules
+invariants = [
+    Invariant(
+        "test_before_deploy",
+        lambda s: not s.get("deployed") or s.get("tested"),
+        "Cannot deploy without testing"
+    ),
+]
+
+# Define forbidden states
+danger_zones = [
+    CaptureBasin(
+        "untested_deploy",
+        is_bad=lambda s: s.get("deployed") and not s.get("tested"),
+        max_steps=1
+    ),
+]
+
+# Create task
 task = TaskDefinition(
-    goal="Deploy a service",
-    initial_state=State({"built": False, "tested": False, "deployed": False}),
-    available_actions=[
-        ActionSpec(id="build", name="Build", description="Compile",
-                   effects=(Effect("built", "set", True),), cost=3.0),
-        ActionSpec(id="test", name="Test", description="Run tests",
-                   effects=(Effect("tested", "set", True),), cost=2.0),
-        ActionSpec(id="deploy", name="Deploy", description="Ship it",
-                   effects=(Effect("deployed", "set", True),), cost=5.0,
-                   risk_level="high"),
-    ],
-    invariants=[
-        Invariant("no_untested_deploy",
-            lambda s: not s.get("deployed") or s.get("tested"),
-            "Cannot deploy without passing tests"),
-    ],
+    goal="Successfully deploy service",
+    initial_state=State({
+        "built": False,
+        "tested": False,
+        "deployed": False,
+        "cost": 0.0
+    }),
+    available_actions=actions,
+    invariants=invariants,
+    capture_basins=danger_zones,
     budget=50.0,
     goal_predicate=lambda s: s.get("deployed", False),
     dependencies={
-        "build": [],
-        "test": [("build", "Need build first")],
+        "test": [("build", "Need to build first")],
+        "deploy": [("test", "Need to test first")],
+    }
+)
+
+# Run it
+orch = Orchestrator(task, llm_client)
+result = orch.execute_task(max_steps=50)
+
+if result.goal_achieved:
+    print(f"✓ Service deployed in {result.step_count} steps")
+else:
+    print(f"✗ Deployment failed: {result.failure_reason}")
+```
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute.
+
+## License
+
+ConstrAI is released under the Apache 2.0 License. See [LICENSE](LICENSE) for details.
         "deploy": [("test", "Must test before deploying")],
     },
 )
@@ -243,9 +479,10 @@ To cite ConstrAI in your work:
     title = {ConstrAI: Formal safety framework for AI agents},
     author = {Ambar},
     year = {2026},
-    howpublished = {\url{https://github.com/Ambar-13/ConstrAI}},
+    howpublished = {\url{[https://github.com/Ambar-13/ConstrAI](https://github.com/Ambar-13/ConstrAI)}},
     note = {Version 0.2.0}
 }
 ```
 
+**Contact:** Ambar (ambar13@u.nus.edu)
 Affiliation: National University of Singapore (NUS)

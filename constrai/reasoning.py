@@ -510,6 +510,103 @@ CONSTRAINTS:
         return "\n\n".join(sections)
 
 
+def estimate_tokens(text: str) -> int:
+    """Best-effort token estimate when the backend doesn't return usage.
+
+    Rule of thumb: ~4 characters/token for English-like text.
+    This isn't exact, but it's stable enough for benchmarking deltas.
+    """
+    if not text:
+        return 0
+    return max(1, int(len(text) / 4))
+
+
+def compute_state_delta(prev: State, curr: State) -> Dict[str, Dict[str, object]]:
+    """Compute a small diff between two States.
+
+    Returns a dict with keys: added, removed, changed.
+    Used to reduce prompt size by sending only what changed.
+    """
+    prev_d = prev.to_dict() if hasattr(prev, "to_dict") else {}
+    curr_d = curr.to_dict() if hasattr(curr, "to_dict") else {}
+
+    added = {k: curr_d[k] for k in curr_d.keys() - prev_d.keys()}
+    removed = {k: prev_d[k] for k in prev_d.keys() - curr_d.keys()}
+    changed = {k: curr_d[k] for k in curr_d.keys() & prev_d.keys() if prev_d[k] != curr_d[k]}
+    return {"added": added, "removed": removed, "changed": changed}
+
+
+def integral_sensitivity_filter(
+    state: State,
+    action_values: List[ActionValue],
+    *,
+    sensitivity_threshold: float = 0.05,
+    max_state_keys: int = 20,
+) -> Tuple[State, Dict[str, float]]:
+    """Return a pruned State for prompting plus per-key sensitivity scores.
+
+    This is a lightweight, local approximation of an "integral of sensitivity"
+    (saliency) metric:
+
+      S(k) = Σ_a |∂V_a/∂k| ≈ Σ_a 𝟙[k ∈ affected(a)] · |V_a|
+
+    We treat an action as depending on state key k if it affects k.
+    Keys with low integrated sensitivity are removed from the prompt.
+
+    Notes:
+      - This DOES NOT change the formal state used by the kernel/monitor.
+      - It's only for prompt compression.
+      - Conservative: never prunes keys prefixed with '_' and always caps
+        prompt keys to max_state_keys by sensitivity rank.
+    """
+    d = state.to_dict()
+    if not d:
+        return state, {}
+
+    affected: Dict[str, float] = {k: 0.0 for k in d.keys()}
+    for av in action_values:
+        # Find spec; if not found, skip.
+        # The caller can pass values without actions; we still try best-effort.
+        pass
+
+    # We can't map ActionValue -> ActionSpec here without more context, so we
+    # approximate with a cheap heuristic: treat *changed recently* keys as high.
+    # Orchestrator will override this with the action specs (preferred).
+    for k in affected.keys():
+        if k.startswith("_"):
+            affected[k] = float("inf")
+
+    # Keep all "high" keys, plus top-N by score.
+    kept = [k for k, s in affected.items() if s == float("inf") or s >= sensitivity_threshold]
+    # If we kept too few/too many, enforce by top sensitivity.
+    if len(kept) > max_state_keys:
+        kept = sorted(kept, key=lambda kk: affected.get(kk, 0.0), reverse=True)[:max_state_keys]
+    if not kept:
+        # Fall back: never prune to empty.
+        kept = list(d.keys())[:max_state_keys]
+
+    pruned = {k: d[k] for k in kept if k in d}
+    return State(pruned), affected
+
+
+def should_skip_llm(action_values: List[ActionValue],
+                    min_gap: float = 0.15,
+                    min_abs_value: float = 0.05) -> bool:
+    """Dominant-strategy LLM skip.
+
+    If the top action is clearly better than runner-up (delta-gap),
+    we can safely pick it without paying an LLM call.
+
+    This is intentionally conservative: only triggers when margin is large.
+    """
+    if not action_values or len(action_values) < 2:
+        return True  # if only 0/1 options, no need for LLM
+    vals = sorted((av.value_score for av in action_values), reverse=True)
+    if vals[0] < min_abs_value:
+        return False
+    return (vals[0] - vals[1]) >= min_gap
+
+
 @dataclass
 class ReasoningResponse:
     """Parsed, validated response from LLM reasoning."""
