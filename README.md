@@ -145,6 +145,9 @@ Monte Carlo (1000 random tasks):                      1000/1000 budget safe
 
 The chaos fuzzer tests: hallucinated actions, budget overflow, invariant evasion, state poisoning, trace tampering, success cheating, resource exhaustion, 6 malicious LLM personalities, dependency bypass, type confusion, resource lifecycle violations, discovery poisoning, and 1000 randomized attack scenarios.
 
+##NOTE
+Current implementation works as good as the invariant. The well define dthe invariants are, the better the safety. Next version will focus on defining common invariants, helping users make well-defined invariants, and testing the invariants.
+
 ## Safety Evaluation
 
 ConstrAI was evaluated against an internal adversarial evaluation suite covering 63 actions across 6 agent types and 39 attack vectors:
