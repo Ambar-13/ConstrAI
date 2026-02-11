@@ -67,6 +67,50 @@ from .reasoning import (
     REASONING_CLAIMS,
 )
 
+# ── Saliency & Prompt Optimization ──
+from .saliency import (
+    SaliencyEngine,
+    SaliencyResult,
+)
+
+# ── Reference Monitor (Formal Enforcement) ──
+from .reference_monitor import (
+    SecurityLevel,
+    DataLabel,
+    LabelledData,
+    ControlBarrierFunction,
+    QPProjector,
+    CaptureBasin,
+    ContractSpecification,
+    OperadicComposition,
+    ReferenceMonitor,
+    SafeHoverState,
+)
+
+# ── Advanced Math (T7, Gradients, Active HJB) ──
+from .inverse_algebra import (
+    InverseEffect,
+    RollbackRecord,
+    InverseAlgebra,
+    action_with_inverse_guarantee,
+)
+
+from .gradient_tracker import (
+    SensitivityLevel,
+    GradientScore,
+    GradientReport,
+    GradientTracker,
+    PerInvariantBudget,
+)
+
+from .active_hjb_barrier import (
+    SafetyBarrierViolation,
+    HJBBarrierCheck,
+    ActiveHJBBarrier,
+    RecoveryStrategy,
+    choose_recovery_strategy,
+)
+
 # ── Orchestrator ──
 from .orchestrator import (
     TaskDefinition,
@@ -108,7 +152,29 @@ from .hardening import (
     HARDENING_CLAIMS,
 )
 
-__version__ = "0.2.0"
+# ── Advanced Math: Absolute Rigor ──
+from .jacobian_fusion import (
+    JacobianFusion,
+    JacobianScore,
+    JacobianReport,
+    BoundarySeverity,
+)
+
+from .safe_hover import (
+    AuthoritativeHJBBarrier,
+    SafeHoverSignal,
+    HJBEnforcementCheck,
+)
+
+from .operadic_composition import (
+    SuperTask,
+    TaskComposer,
+    InterfaceSignature,
+    VerificationCertificate,
+    CompositionType,
+)
+
+__version__ = "0.3.0"
 __all__ = [
     # Formal
     "State", "Effect", "ActionSpec", "Invariant",
@@ -120,8 +186,19 @@ __all__ = [
     "ActionValue", "ActionValueComputer",
     "ReasoningRequest", "ReasoningResponse", "parse_llm_response",
     "LLMAdapter", "MockLLMAdapter", "REASONING_CLAIMS",
+    # Saliency
+    "SaliencyEngine", "SaliencyResult",
+    # Reference Monitor
+    "SecurityLevel", "DataLabel", "LabelledData",
+    "ControlBarrierFunction", "QPProjector",
+    "CaptureBasin", "ContractSpecification", "OperadicComposition",
+    "ReferenceMonitor", "SafeHoverState",
     # Orchestrator
     "TaskDefinition", "Orchestrator", "ExecutionResult",
     "TerminationReason", "OutcomeType", "Outcome",
     "ProgressMonitor", "ConstrAI_SYSTEM_PROMPT",
+    # Advanced Math: Absolute Rigor
+    "JacobianFusion", "JacobianScore", "JacobianReport", "BoundarySeverity",
+    "AuthoritativeHJBBarrier", "SafeHoverSignal", "HJBEnforcementCheck",
+    "SuperTask", "TaskComposer", "InterfaceSignature", "VerificationCertificate", "CompositionType",
 ]

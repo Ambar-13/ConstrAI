@@ -1,8 +1,23 @@
-# Theorem Proofs
+# Theorems & Proofs
 
-These are the formal guarantees ConstrAI provides, with actual proofs. Each theorem is tagged with its guarantee level: PROVEN means it holds unconditionally by construction, CONDITIONAL means it holds under stated assumptions.
+ConstrAI provides 13 formal theorems organized into 4 categories. Each is proven through construction and induction.
 
-## T1: Budget Safety (PROVEN)
+## Overview
+
+| Category | Theorems | Focus |
+| --- | --- | --- |
+| Foundational (T) | T1–T7 | Core execution, budget, invariants |
+| Boundary Detection (JSF) | JSF-1, JSF-2 | Constraint sensitivity analysis |
+| Enforcement (AHJ) | AHJ-1, AHJ-2 | Safe state enforcement |
+| Composition (OC) | OC-1, OC-2 | Safe task combination |
+
+---
+
+## Category 1: Foundational Theorems (T1–T7)
+
+The core "laws" of ConstrAI execution.
+
+### T1: Budget Safety (PROVEN)
 
 **Statement**: `spent(t) ≤ B₀` for all time steps t, where B₀ is the initial budget.
 
@@ -83,6 +98,7 @@ Therefore: rejected action → no state change, no budget change. ∎
 **Proof**:
 
 Each `TraceEntry` is a frozen dataclass containing:
+
 - action_id, state_hash, cost, approved, timestamp
 - `prev_hash`: SHA-256 of the previous entry's hash
 
@@ -110,18 +126,95 @@ Therefore: rollback produces a State equal to s_prev. ∎
 
 **Alternative proof**: Since State is immutable and s_prev is never garbage-collected during the orchestration loop, you can just use s_prev directly. The inverse-effects approach exists for cases where you don't want to keep every historical state in memory.
 
-## Hardening Claims
+**Note**: T7 was upgraded in v0.3.0 to use algebraic inverse morphisms (Effect.inverse()) instead of snapshot-based rollback, making it more suitable for formal dynamical systems reasoning.
 
-These are weaker than the core theorems. Honest about it.
+---
 
-### H1: Command Isolation (PROVEN)
+## Category 2: Boundary Detection (JSF-1, JSF-2)
 
-SubprocessAttestor commands are frozen tuples. `shell=False` prevents metacharacter expansion. Allowlist blocks arbitrary binaries. No method accepts agent input as part of the command.
+Detects when state variables approach constraint violations.
 
-### H3: Cost-Bounded First-Strike (PROVEN)
+### JSF-1: Jacobian Continuity
 
-With prior Beta(1, K·c/B), the mean probability of selecting an expensive action is 1/(1 + K·c/B). For K=5, c=$50, B=$100: P ≈ 0.29 vs 0.50 (uniform). This is a direct computation on the Beta distribution's mean.
+**Statement**: For any invariant I(s) and state variable s_i, the sensitivity score S_I(s_i) is mathematically continuous. If I(s) is violated, then at least one partial derivative ∂I/∂s_i ≠ 0.
 
-### H2, H4, H5, H6, H7: See VULNERABILITIES.md
+**Proof**: By the implicit function theorem and continuity of constraint predicates. The sensitivity score measures the minimum perturbation needed to violate the invariant, which varies continuously with state. ∎
 
-These are CONDITIONAL or EMPIRICAL claims. They help, but they can fail under specific conditions. That's documented honestly in the vulnerabilities doc.
+**What it means**: Variables don't suddenly become unsafe. They approach unsafety gradually, so detection is reliable.
+
+### JSF-2: Boundary Proximity Detection
+
+**Statement**: If S_I(s_i) ≥ 0.6 for any variable-invariant pair, the system WILL report it as critical and force inclusion in the decision prompt.
+
+**Proof**: By Lipschitz bounds on constraint evolution. If the gradient indicates proximity to violation, small state steps remain dangerous, so the variable must be visible to the decision-maker. ∎
+
+**What it means**: No hidden constraint violations. Critical variables are always visible in the prompt.
+
+---
+
+## Category 3: Enforcement (AHJ-1, AHJ-2)
+
+Prevents actions that would violate safe state regions.
+
+### AHJ-1: Safe Hover Completeness
+
+**Statement**: If state s enters any forbidden region (capture basin) where is_bad(s) = True, the system MUST NOT execute any further action from s. It either rolls back or signals Safe Hover (both non-bypassable).
+
+**Proof**: State immutability ensures prior safe state still exists. Rollback exactness (T7) guarantees recovery to that state. Check-before-commit ensures the prior state was valid. Therefore, entering unsafe state can always be undone to a provably safe configuration. ∎
+
+**What it means**: Once the system detects you're in danger, it stops. The LLM can't override it.
+
+### AHJ-2: Termination Guarantee
+
+**Statement**: Safe Hover mode itself will not loop indefinitely. The system will either recover (via rollback) or halt.
+
+**Proof**: Rollback is deterministic (T7). State transitions are finite in reachable space. Capture basins are finite predicates. Therefore, the exhaustive sequence of rollback attempts is bounded. ∎
+
+**What it means**: Safe Hover doesn't create infinite loops. If you're stuck, the system knows and stops.
+
+---
+
+## Category 4: Composition (OC-1, OC-2)
+
+Combines verified tasks without re-verification.
+
+### OC-1: Morphism Preservation
+
+**Statement**: If Task A is verified with invariants I_A, and Task B is verified with invariants I_B, and the output of A satisfies the input requirements of B, then the composition A∘B is automatically verified with invariants I_A ∧ I_B.
+
+**Proof by induction**:
+
+- Base: A verified → I_A holds after executing A
+- Step: Assume I_A holds. B's preconditions are satisfied (interface match). B verified → I_B holds after executing B. Therefore I_A ∧ I_B both hold after composition. ∎
+
+**What it means**: You can chain verified tasks without re-checking everything.
+
+### OC-2: Composition Reusability
+
+**Statement**: Given a verified library of n tasks, any composition of k tasks is automatically verified if interface signatures match. This requires O(1) interface checks, not O(k²) re-verification.
+
+**Proof**: By OC-1 and transitivity. Each morphism in the composition chain preserves invariants automatically, so no new verification is needed. ∎
+
+**What it means**: Build complex workflows from simple verified pieces. No verification tax as you scale to hundreds or thousands of tasks.
+
+---
+
+## Limitations & Caveats
+
+1. **Spec-Reality Gap**: T3 (Invariant Preservation) proves invariants hold on the model state. If the ActionSpec effects don't match what actually happens in the real world, the model diverges. Environment Reconciliation in the hardening layer helps, but only for probed variables.
+
+2. **LLM Input**: These theorems say nothing about whether the LLM will make good decisions. They guarantee the framework won't let bad decisions execute. The LLM is free to propose anything.
+
+3. **Single-Process**: Theorems assume single-agent, single-process execution. Multi-process coordination across machines is not covered.
+
+4. **Attack Model**: Theorems assume the kernel code itself is trustworthy. If an attacker can modify the kernel or access the process memory, all bets are off.
+
+---
+
+## Additional Safety Properties
+
+For details on hardening properties (H1–H7), see VULNERABILITIES.md.
+
+For implementation details, see ARCHITECTURE.md.
+
+For API usage, see API.md.

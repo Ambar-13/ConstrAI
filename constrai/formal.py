@@ -207,6 +207,35 @@ class Effect:
         if m == "delete":    return _SENTINEL_DELETE
         raise ValueError(f"Unknown effect mode: {m!r}")
 
+    def inverse(self) -> "Effect":
+        """
+        Compute the inverse Effect that reverts this effect's operation.
+
+        For increment/decrement/multiply/append/remove modes, returns the
+        algebraic inverse. For set/delete, raises ValueError (requires prior state).
+        """
+        m = self.mode
+        if m == "set":
+            # set cannot be inverted without prior value
+            # Return placeholder; ActionSpec.compute_inverse_effects() handles this
+            raise ValueError("Cannot invert 'set' mode without prior state value")
+        elif m == "increment":
+            return Effect(self.variable, "decrement", self.value)
+        elif m == "decrement":
+            return Effect(self.variable, "increment", self.value)
+        elif m == "multiply":
+            if self.value == 0:
+                raise ValueError("Cannot invert multiply by 0 without prior state")
+            return Effect(self.variable, "multiply", 1.0 / self.value)
+        elif m == "append":
+            return Effect(self.variable, "remove", self.value)
+        elif m == "remove":
+            return Effect(self.variable, "append", self.value)
+        elif m == "delete":
+            raise ValueError("Cannot invert 'delete' mode without prior state value")
+        else:
+            raise ValueError(f"Unknown effect mode: {m!r}")
+
 
 @dataclass(frozen=True)
 class ActionSpec:
@@ -328,11 +357,23 @@ class Invariant:
       ∎
     """
     def __init__(self, name: str, predicate: Callable[[State], bool],
-                 description: str = "", severity: str = "critical"):
+                 description: str = "", severity: str = "critical",
+                 enforcement: Optional[str] = None):
         self.name = name
         self.predicate = predicate
         self.description = description or name
-        self.severity = severity  # "warning" or "critical"
+        # Back-compat: severity historically implied enforcement.
+        # New explicit field names the behavior: "blocking" or "monitoring".
+        # - "critical" => blocking
+        # - "warning"  => monitoring
+        self.severity = severity  # "warning" or "critical" (legacy label)
+        if enforcement is None:
+            self.enforcement = "blocking" if severity == "critical" else "monitoring"
+        else:
+            if enforcement not in ("blocking", "monitoring"):
+                raise ValueError(
+                    f"Invariant enforcement must be 'blocking' or 'monitoring', got {enforcement!r}")
+            self.enforcement = enforcement
         self._violations = 0
 
     def check(self, state: State) -> Tuple[bool, str]:
@@ -351,7 +392,10 @@ class Invariant:
         return self._violations
 
     def to_llm_text(self) -> str:
-        return f"SAFETY RULE [{self.severity}]: {self.description}"
+        label = self.enforcement
+        if self.severity:
+            label = f"{label}/{self.severity}"
+        return f"SAFETY RULE [{label}]: {self.description}"
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -659,7 +703,7 @@ class SafetyKernel:
                 else:
                     checks.append((f"Invariant:{inv.name}",
                                   CheckResult.FAIL_INVARIANT, msg))
-                    if inv.severity == "critical":
+                    if getattr(inv, "enforcement", "blocking") == "blocking":
                         approved = False
 
         # ── Check 4: Pluggable preconditions ──

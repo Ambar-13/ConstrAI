@@ -40,7 +40,19 @@ from .reasoning import (
     BeliefState, CausalGraph, ActionValueComputer, ActionValue,
     ReasoningRequest, ReasoningResponse, parse_llm_response,
     LLMAdapter, MockLLMAdapter, Belief,
+    estimate_tokens, should_skip_llm, compute_state_delta,
 )
+from .reference_monitor import (
+    ReferenceMonitor, ControlBarrierFunction, CaptureBasin,
+    ContractSpecification, DataLabel, SecurityLevel,
+)
+
+from .verification_log import ProofRecord, ProofStep, write_proof
+
+# ── Advanced Math (T7, Gradients, Active HJB) ──
+from .inverse_algebra import InverseAlgebra, RollbackRecord
+from .gradient_tracker import GradientTracker
+from .active_hjb_barrier import ActiveHJBBarrier, RecoveryStrategy, choose_recovery_strategy
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -170,6 +182,11 @@ class TaskDefinition:
     stuck_patience: int = 5
     system_prompt: str = ""
     risk_aversion: float = 1.0
+    # Prompt-token optimization (Integral Sensitivity Filter)
+    sensitivity_threshold: float = 0.05
+    max_prompt_state_keys: int = 20
+    proof_path: str = ""  # if set, write a .constrai_proof JSON record
+    capture_basins: Optional[List['CaptureBasin']] = None  # Advanced: HJB reachability basins
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -293,6 +310,33 @@ class Orchestrator:
             min_action_cost=task.min_action_cost,
         )
 
+        # ── Attestation / proof steps (optional) ──
+        self._proof_steps: List[ProofStep] = []
+
+        # ── Reference Monitor (Authoritative Enforcement) ──
+        self.monitor = ReferenceMonitor(
+            ifc_enabled=True,
+            cbf_enabled=True,
+            hjb_enabled=True,
+        )
+        # Configure CBF for budget resource
+        self.monitor.add_cbf(
+            h=lambda s: (task.budget - self.kernel.budget.spent) / max(task.budget, 1.0),
+            alpha=0.1  # 10% decay per step when approaching limit
+        )
+        
+        # ── Advanced Math: Gradient Tracker (T7 Safety Margins) ──
+        self.gradient_tracker = GradientTracker(task.invariants)
+        
+        # ── Advanced Math: Active HJB Barrier ──
+        self.hjb_barrier = ActiveHJBBarrier(
+            basins=task.capture_basins or [],
+            max_lookahead=min(5, int(task.budget / task.min_action_cost // 2))
+        )
+        
+        # ── State history for rollback (T7) ──
+        self._rollback_records: List[RollbackRecord] = []
+
         # ── Reasoning Layer ──
         self.beliefs = BeliefState()
         self.causal_graph = CausalGraph()
@@ -301,11 +345,23 @@ class Orchestrator:
         self.progress_monitor = ProgressMonitor(
             patience=task.stuck_patience)
 
+        # ── Metrics ──
+        self._actions_attempted = 0
+        self._actions_succeeded = 0
+        self._actions_rejected_safety = 0
+        self._actions_rejected_reasoning = 0
+        self._rollbacks = 0
+        self._llm_calls = 0
+        self._llm_prompt_tokens = 0
+        self._llm_output_tokens = 0
+        self._last_prompt_state = None
+        self._consecutive_failures = 0
+        self._errors = []
+
         # ── State ──
         self.current_state = task.initial_state
-        self.action_map: Dict[str, ActionSpec] = {
-            a.id: a for a in task.available_actions}
-        self._state_history: List[State] = [task.initial_state]
+        self.action_map = {a.id: a for a in task.available_actions}
+        self._state_history = [task.initial_state]
 
         # ── Initialize causal graph ──
         if task.dependencies:
@@ -320,16 +376,6 @@ class Orchestrator:
         if task.priors:
             for key, (alpha, beta) in task.priors.items():
                 self.beliefs.set_prior(key, alpha, beta)
-
-        # ── Metrics ──
-        self._actions_attempted = 0
-        self._actions_succeeded = 0
-        self._actions_rejected_safety = 0
-        self._actions_rejected_reasoning = 0
-        self._rollbacks = 0
-        self._llm_calls = 0
-        self._consecutive_failures = 0
-        self._errors: List[str] = []
 
     def _compute_progress(self) -> float:
         if self.task.goal_progress_fn:
@@ -384,9 +430,60 @@ class Orchestrator:
     def _ask_llm(self, available: List[ActionSpec],
                  values: List[ActionValue]) -> ReasoningResponse:
         """Build structured prompt, query LLM, parse response."""
+
+        # Dominant-strategy skip: if one action clearly dominates, don't pay LLM.
+        if should_skip_llm(values):
+            best = sorted(values, key=lambda v: v.value_score, reverse=True)[0]
+            return ReasoningResponse(
+                chosen_action_id=best.action_id,
+                reasoning="Dominant-strategy skip: selected top-valued action without LLM call.",
+                expected_outcome="Progress",
+                risk_assessment="Low (large value gap)",
+                alternative_considered="Second-best action had much lower value score.",
+                should_stop=False,
+                stop_reason="",
+                raw_response="",
+                parse_errors=[],
+            )
+
+        # ── Integral Sensitivity Filter (prompt saliency pruning) ──
+        # Compute a local integrated sensitivity score per state key:
+        #   S(k) = Σ_{a in available} 𝟙[k ∈ affected(a)] · |V(a)|
+        # Then keep keys with S(k) above threshold (plus underscore keys).
+        state_for_prompt = self.current_state
+        sensitivity_scores: Dict[str, float] = {}
+        try:
+            d = self.current_state.to_dict()
+            sensitivity_scores = {k: 0.0 for k in d.keys()}
+            value_by_id = {v.action_id: v.value_score for v in values}
+            for a in available:
+                w = abs(float(value_by_id.get(a.id, 0.0)))
+                for k in a.affected_variables():
+                    if k in sensitivity_scores:
+                        sensitivity_scores[k] += w
+
+            # Always keep internal/meta keys
+            for k in list(sensitivity_scores.keys()):
+                if k.startswith("_"):
+                    sensitivity_scores[k] = float("inf")
+
+            threshold = float(getattr(self.task, "sensitivity_threshold", 0.05) or 0.05)
+            max_keys = int(getattr(self.task, "max_prompt_state_keys", 20) or 20)
+            kept = [
+                k for k, s in sensitivity_scores.items()
+                if s == float("inf") or s >= threshold
+            ]
+            if len(kept) > max_keys:
+                kept = sorted(kept, key=lambda kk: sensitivity_scores.get(kk, 0.0), reverse=True)[:max_keys]
+            if kept:
+                state_for_prompt = State({k: d[k] for k in kept if k in d})
+        except Exception:
+            # If anything goes wrong, fall back to full state.
+            state_for_prompt = self.current_state
+
         request = ReasoningRequest(
             goal=self.task.goal,
-            state=self.current_state,
+            state=state_for_prompt,
             available_actions=available,
             action_values=values,
             beliefs=self.beliefs,
@@ -395,7 +492,36 @@ class Orchestrator:
             history_summary=self._build_history_summary(),
         )
         prompt = request.to_prompt()
-        
+
+        # Record prompt token reduction (best-effort).
+        try:
+            full_req = ReasoningRequest(
+                goal=self.task.goal,
+                state=self.current_state,
+                available_actions=available,
+                action_values=values,
+                beliefs=self.beliefs,
+                causal_graph=self.causal_graph,
+                safety_kernel=self.kernel,
+                history_summary=self._build_history_summary(),
+            )
+            full_prompt = full_req.to_prompt()
+            self._llm_prompt_tokens += estimate_tokens(prompt)
+            self._llm_prompt_tokens += estimate_tokens(self.task.system_prompt or ConstrAI_SYSTEM_PROMPT)
+            # Track savings as a negative "virtual" token count in errors log for now.
+            saved = max(0, estimate_tokens(full_prompt) - estimate_tokens(prompt))
+            if saved:
+                self._errors.append(f"prompt_savings_tokens={saved}")
+        except Exception:
+            self._llm_prompt_tokens += estimate_tokens(prompt)
+            self._llm_prompt_tokens += estimate_tokens(self.task.system_prompt or ConstrAI_SYSTEM_PROMPT)
+
+        # Delta-state append (token saver). Safety enforcement still sees full state.
+        if self._last_prompt_state is not None:
+            delta = compute_state_delta(self._last_prompt_state, self.current_state)
+            prompt = prompt + "\n\n## STATE DELTA (since last decision)\n" + json.dumps(delta, indent=2, default=str)
+        self._last_prompt_state = self.current_state
+
         t0 = _time.time()
         raw = self.llm.complete(
             prompt=prompt,
@@ -404,6 +530,7 @@ class Orchestrator:
         )
         latency = (_time.time() - t0) * 1000
         self._llm_calls += 1
+        self._llm_output_tokens += estimate_tokens(raw)
 
         valid_ids = set(a.id for a in available)
         response = parse_llm_response(raw, valid_ids)
@@ -413,39 +540,179 @@ class Orchestrator:
     def _execute_action(self, action: ActionSpec,
                         reasoning: str) -> Tuple[bool, str]:
         """
-        Try to execute an action through the safety kernel.
+        Execute an action through the COMPLETE safety gauntlet.
+        
+        Flow:
+          1. Gradient Tracker: Compute safety margins
+          2. Active HJB Barrier: Check reachability → force Safe Hover if critical
+          3. Reference Monitor: M1–M5 (IFC, CBF, QP, HJB, composition)
+          4. Formal Kernel: T1–T7 (budget, termination, invariants, atomicity)
+          5. Inverse Algebra: Record rollback metadata for recovery
+        
         Returns (success, message).
         """
         self._actions_attempted += 1
 
-        # ── Safety check (formal) ──
-        verdict = self.kernel.evaluate(self.current_state, action)
-        if not verdict.approved:
+        # ── Step 0: Compute Safety Gradients (Formal Margin Analysis) ──
+        gradient_report = self.gradient_tracker.compute_gradients(self.current_state)
+        should_hover_by_gradient, grad_msg = self.gradient_tracker.should_trigger_safe_hover(
+            gradient_report
+        )
+        if should_hover_by_gradient:
+            self._errors.append(f"Safety gradient triggered warning: {grad_msg}")
+
+        # ── Step 1: Active HJB Reachability Barrier ──
+        available_next = self.task.available_actions
+        hjb_safe, hjb_check = self.hjb_barrier.check_and_enforce(
+            self.current_state,
+            action,
+            available_next,
+            current_step=self.kernel.step_count,
+            max_steps=self.kernel.max_steps
+        )
+        
+        if not hjb_safe:
+            # HJB violation: force safe hover or rollback
             self._actions_rejected_safety += 1
             self.kernel.record_rejection(
                 self.current_state, action,
-                verdict.rejection_reasons, reasoning)
+                (hjb_check.recommendation,), reasoning)
             self.beliefs.observe(f"action:{action.id}:succeeds", False)
-            return False, f"Safety rejected: {verdict.rejection_reasons}"
+            
+            # Decide recovery strategy
+            recovery = choose_recovery_strategy(
+                hjb_check,
+                self.kernel.step_count,
+                self.kernel.max_steps,
+                is_reversible_available=(len(self._rollback_records) > 0)
+            )
+            
+            # Attempt rollback if possible
+            if recovery == RecoveryStrategy.ROLLBACK_ONE and self._rollback_records:
+                record = self._rollback_records.pop()
+                self.current_state = record.apply_rollback(self.current_state)
+                self.kernel.rollback(record.state_before_snapshot, self.current_state, action)
+                self._rollbacks += 1
+                return True, f"Rollback triggered by HJB: {hjb_check.recommendation}"
+            
+            # Otherwise Safe Hover
+            self._proof_steps.append(ProofStep(
+                step_index=self.kernel.step_count,
+                action_id=action.id,
+                action_name=action.name,
+                approved=False,
+                reason="hjb_barrier",
+                monitor_reason=hjb_check.recommendation,
+                kernel_reasons=[],
+                prompt_tokens_est=self._llm_prompt_tokens,
+                output_tokens_est=self._llm_output_tokens,
+            ))
+            return False, f"HJB barrier: {hjb_check.recommendation}"
 
-        # ── Execute (atomic — T5) ──
+        # ── Step 2: Reference Monitor (Authoritative Enforcement) ──
+        # Theorem M0: enforce() returns (safe, reason, repaired_action)
+        monitor_safe, monitor_msg, repaired = self.monitor.enforce(
+            action, self.current_state, available_next
+        )
+        
+        if not monitor_safe:
+            self._actions_rejected_safety += 1
+            self.kernel.record_rejection(
+                self.current_state, action,
+                (monitor_msg,), reasoning)
+            self.beliefs.observe(f"action:{action.id}:succeeds", False)
+            self._proof_steps.append(ProofStep(
+                step_index=self.kernel.step_count,
+                action_id=action.id,
+                action_name=action.name,
+                approved=False,
+                reason="monitor_reject",
+                monitor_reason=monitor_msg,
+                kernel_reasons=[],
+                prompt_tokens_est=self._llm_prompt_tokens,
+                output_tokens_est=self._llm_output_tokens,
+            ))
+            return False, f"Monitor rejected: {monitor_msg}"
+        
+        # Use repaired action if monitor produced one
+        exec_action = repaired if repaired is not None else action
+
+        # ── Step 3: Formal Safety Kernel (T1-T7) ──
+        verdict = self.kernel.evaluate(self.current_state, exec_action)
+        if not verdict.approved:
+            self._actions_rejected_safety += 1
+            self.kernel.record_rejection(
+                self.current_state, exec_action,
+                verdict.rejection_reasons, reasoning)
+            self.beliefs.observe(f"action:{exec_action.id}:succeeds", False)
+            self._proof_steps.append(ProofStep(
+                step_index=self.kernel.step_count,
+                action_id=exec_action.id,
+                action_name=exec_action.name,
+                approved=False,
+                reason="kernel_reject",
+                monitor_reason=monitor_msg,
+                kernel_reasons=list(verdict.rejection_reasons),
+                prompt_tokens_est=self._llm_prompt_tokens,
+                output_tokens_est=self._llm_output_tokens,
+            ))
+            return False, f"Kernel rejected: {verdict.rejection_reasons}"
+
+        # ── Step 4: Execute (atomic — T5) ──
         try:
             new_state, trace_entry = self.kernel.execute(
-                self.current_state, action, reasoning)
+                self.current_state, exec_action, reasoning)
         except Exception as e:
             self._errors.append(f"Execute error: {e}")
-            self.beliefs.observe(f"action:{action.id}:succeeds", False)
+            self.beliefs.observe(f"action:{exec_action.id}:succeeds", False)
+            self._proof_steps.append(ProofStep(
+                step_index=self.kernel.step_count,
+                action_id=exec_action.id,
+                action_name=exec_action.name,
+                approved=False,
+                reason="execute_error",
+                monitor_reason=monitor_msg,
+                kernel_reasons=[str(e)],
+                prompt_tokens_est=self._llm_prompt_tokens,
+                output_tokens_est=self._llm_output_tokens,
+            ))
             return False, f"Execution error: {e}"
 
-        # ── Observe outcome ──
+        # ── Step 5: Record Rollback (T7 Inverse Algebra) ──
+        # Compute and store inverse effects for future recovery
+        try:
+            rollback_record = InverseAlgebra.make_rollback_record(
+                exec_action,
+                self.current_state,
+                new_state,
+                timestamp=_time.time()
+            )
+            self._rollback_records.append(rollback_record)
+        except Exception as e:
+            self._errors.append(f"Rollback record error: {e}")
+            # Non-fatal; execution still succeeds
+
+        # ── Step 6: Observe outcome ──
         self.current_state = new_state
         self._state_history.append(new_state)
         self._actions_succeeded += 1
         self._consecutive_failures = 0
 
+        self._proof_steps.append(ProofStep(
+            step_index=self.kernel.step_count,
+            action_id=exec_action.id,
+            action_name=exec_action.name,
+            approved=True,
+            reason="approved",
+            monitor_reason=monitor_msg,
+            kernel_reasons=[],
+            prompt_tokens_est=self._llm_prompt_tokens,
+            output_tokens_est=self._llm_output_tokens,
+        ))
+
         # Update beliefs
-        self.beliefs.observe(f"action:{action.id}:succeeds", True)
-        self.causal_graph.mark_completed(action.id)
+        self.beliefs.observe(f"action:{exec_action.id}:succeeds", True)
+        self.causal_graph.mark_completed(exec_action.id)
 
         # Update progress
         progress = self._compute_progress()
@@ -567,6 +834,21 @@ class Orchestrator:
                      t_start: float,
                      errors: List[str] = None) -> ExecutionResult:
         progress = self._compute_progress()
+        # Optional proof artifact (LLM-independent)
+        if getattr(self.task, "proof_path", ""):
+            try:
+                trace_ok, head_hash = self.kernel.trace.verify_integrity()
+                record = ProofRecord(
+                    version="0.1",
+                    created_at=_time.time(),
+                    goal=self.task.goal,
+                    budget=float(self.task.budget),
+                    trace_hash_head=head_hash if trace_ok else "",
+                    steps=list(self._proof_steps),
+                )
+                write_proof(self.task.proof_path, record)
+            except Exception as e:
+                self._errors.append(f"Proof write error: {e}")
         return ExecutionResult(
             goal_achieved=(reason == TerminationReason.GOAL_ACHIEVED),
             termination_reason=reason,
