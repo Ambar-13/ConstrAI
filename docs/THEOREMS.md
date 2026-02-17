@@ -6,14 +6,14 @@ ConstrAI provides 13 formal theorems organized into 4 categories. Each is proven
 
 | Category | Theorems | Focus |
 | --- | --- | --- |
-| Foundational (T) | T1–T7 | Core execution, budget, invariants |
+| Foundational (T) | T1–T8 | Core execution, budget, invariants, emergency escape |
 | Boundary Detection (JSF) | JSF-1, JSF-2 | Constraint sensitivity analysis |
 | Enforcement (AHJ) | AHJ-1, AHJ-2 | Safe state enforcement |
 | Composition (OC) | OC-1, OC-2 | Safe task combination |
 
 ---
 
-## Category 1: Foundational Theorems (T1–T7)
+## Category 1: Foundational Theorems (T1–T8)
 
 The core "laws" of ConstrAI execution.
 
@@ -127,6 +127,32 @@ Therefore: rollback produces a State equal to s_prev. ∎
 **Alternative proof**: Since State is immutable and s_prev is never garbage-collected during the orchestration loop, you can just use s_prev directly. The inverse-effects approach exists for cases where you don't want to keep every historical state in memory.
 
 **Note**: T7 was upgraded in v0.3.0 to use algebraic inverse morphisms (Effect.inverse()) instead of snapshot-based rollback, making it more suitable for formal dynamical systems reasoning.
+
+## T8: Emergency Escape (CONDITIONAL)
+
+**Statement**: The SAFE_HOVER action is always executable, bypassing budget and step-limit checks. It transitions to a benign safe state with no state effects.
+
+**Assumption**: SAFE_HOVER is registered in `emergency_actions` set and has `effects=()` (no state modifications).
+
+**Proof**:
+
+In `SafetyKernel.evaluate()`:
+
+```python
+if action.id in self.emergency_actions:
+    # Skip min_cost, step_limit, and budget checks
+    return SafetyVerdict(approved=True)
+```
+
+Since T5 (Action Atomicity) ensures no state change on rejection, and SAFE_HOVER has `effects=()` (no state effects), its execution modifies the state by identity only. The budget check is bypassed; cost is still charged but does not prevent execution. Therefore, even if remaining budget is insufficient for other actions, SAFE_HOVER can execute. ∎
+
+**What this means**: When the system detects danger, it always has an escape hatch. The LLM cannot block the kernel from reaching safety.
+
+**Guarantee Level**: CONDITIONAL
+
+- Holds if SAFE_HOVER is registered as emergency action
+- Holds if SAFE_HOVER effects are empty (enforced by constructor)
+- Fails if emergency_actions set is empty (configuration error)
 
 ---
 

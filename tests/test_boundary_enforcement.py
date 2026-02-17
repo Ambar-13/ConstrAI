@@ -216,8 +216,11 @@ class TestOperadicComposition:
         print("TEST: SuperTask Creation with Verification")
         print("="*70)
 
+        from constrai.formal import GuaranteeLevel
+        
         cert = VerificationCertificate(
             task_id="task_1",
+            proof_level=GuaranteeLevel.PROVEN,
             all_invariants_satisfied=True,
             budget_safe=True,
             no_deadlock=True,
@@ -257,8 +260,11 @@ class TestOperadicComposition:
         print("TEST: Compatible Task Composition")
         print("="*70)
 
+        from constrai.formal import GuaranteeLevel
+        
         cert1 = VerificationCertificate(
             task_id="task_add",
+            proof_level=GuaranteeLevel.PROVEN,
             all_invariants_satisfied=True,
             budget_safe=True,
             no_deadlock=True,
@@ -268,6 +274,7 @@ class TestOperadicComposition:
         
         cert2 = VerificationCertificate(
             task_id="task_mul",
+            proof_level=GuaranteeLevel.PROVEN,
             all_invariants_satisfied=True,
             budget_safe=True,
             no_deadlock=True,
@@ -316,11 +323,13 @@ class TestOperadicComposition:
         
         composed = task1.compose(task2, CompositionType.SEQUENTIAL)
         assert composed is not None
-        assert composed.is_verified()  # By Theorem OC-2, no re-verification needed!
+        # Note: Composed task is now CONDITIONAL, not PROVEN
+        assert composed.certificate.is_conditionally_verified()
         
         print(f"\nComposed task: {composed.name}")
-        print(f"Verified automatically: {composed.is_verified()}")
-        print("✅ Compatible tasks successfully composed (no re-verification needed)")
+        print(f"Proof level: {composed.certificate.proof_level.value}")
+        print(f"Conditionally verified: {composed.certificate.is_conditionally_verified()}")
+        print("✅ Compatible tasks successfully composed")
 
     def test_incompatible_composition(self):
         """Test that incompatible tasks cannot compose."""
@@ -328,8 +337,11 @@ class TestOperadicComposition:
         print("TEST: Incompatible Task Composition Rejected")
         print("="*70)
 
+        from constrai.formal import GuaranteeLevel
+        
         cert1 = VerificationCertificate(
             task_id="task_1",
+            proof_level=GuaranteeLevel.PROVEN,
             all_invariants_satisfied=True,
             budget_safe=True,
             no_deadlock=True,
@@ -339,6 +351,7 @@ class TestOperadicComposition:
         
         cert2 = VerificationCertificate(
             task_id="task_2",
+            proof_level=GuaranteeLevel.PROVEN,
             all_invariants_satisfied=True,
             budget_safe=True,
             no_deadlock=True,
@@ -392,11 +405,14 @@ class TestOperadicComposition:
         print("TEST: TaskComposer Library Management")
         print("="*70)
 
+        from constrai.formal import GuaranteeLevel
+        
         composer = TaskComposer()
         
         # Create and register 2 tasks
         cert1 = VerificationCertificate(
-            task_id="sort", all_invariants_satisfied=True,
+            task_id="sort", proof_level=GuaranteeLevel.PROVEN,
+            all_invariants_satisfied=True,
             budget_safe=True, no_deadlock=True, rollback_exact=True,
             proof_hash="sort_hash"
         )
@@ -415,7 +431,8 @@ class TestOperadicComposition:
         )
         
         cert2 = VerificationCertificate(
-            task_id="filter", all_invariants_satisfied=True,
+            task_id="filter", proof_level=GuaranteeLevel.PROVEN,
+            all_invariants_satisfied=True,
             budget_safe=True, no_deadlock=True, rollback_exact=True,
             proof_hash="filter_hash"
         )
@@ -442,11 +459,13 @@ class TestOperadicComposition:
         # Compose chain
         composed = composer.compose_chain(["sort", "filter"], CompositionType.SEQUENTIAL)
         assert composed is not None
-        assert composed.is_verified()
+        # Note: Composed task is now CONDITIONAL, not PROVEN
+        assert composed.certificate.is_conditionally_verified()
         
         print(f"Composed task: {composed.name}")
         print(f"Composition history: {composed.composition_history}")
-        print(f"Verified (no re-verification): {composed.is_verified()}")
+        print(f"Proof level: {composed.certificate.proof_level.value}")
+        print(f"Conditionally verified: {composed.certificate.is_conditionally_verified()}")
         
         print("✅ TaskComposer successfully managed verified library")
 

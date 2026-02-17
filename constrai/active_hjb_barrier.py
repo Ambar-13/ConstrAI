@@ -1,20 +1,49 @@
 """
-Active HJB Safety Barrier
-=========================
+Active HJB Safety Barrier (Heuristic)
+======================================
 
-Wire the Hamilton-Jacobi-Bellman reachability analysis directly into
+This module implements heuristic k-step lookahead reachability analysis for
+capture basin avoidance. It is NOT complete reachability analysis.
+
+IMPORTANT: This analysis is HEURISTIC. It provides pragmatic early-warning
+detection of immediate (1–3 step) dangers when action set is small. It does
+NOT provide formal completeness guarantees or cover the full state space.
+
+For formal invariant preservation, use the kernel's T3 (formal.py).
+
+Wire the Hamilton-Jacobi-Bellman (HJB) reachability analysis directly into
 the orchestrator's decision loop, so it forces Safe Hover when capture
-basins are detected.
+basins are detected within lookahead window.
 
 This module acts as a "Physical Barrier" — it's not passive; it actively
-constrains what actions can be taken.
+constrains what actions can be taken based on reachability heuristics.
+
+Limitations:
+
+1. **Exponential Complexity**: k-step reachability with n actions has
+   complexity O(n^k). Scales poorly. Recommended: k ≤ 3, n ≤ 10.
+
+2. **Incomplete**: Only explores actions provided. Does not explore all
+   possible state space (which is infinite in general).
+
+3. **No Memoization**: Revisits states across branches. Can be optimized
+   with reachability caching, but not implemented.
+
+4. **Approximation**: Assumes actions are deterministic and have no
+   stochastic outcomes.
+
+Use Case: Early-warning detection of immediate (1–3 step) dangers when
+action set is small and bounded. NOT suitable for long-horizon safety
+guarantees or large action spaces.
+
+For formal reachability proofs, use external model checker (e.g., SPIN, TLA+).
 """
 
 from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum
 from typing import List, Optional, Tuple
-from .formal import State, ActionSpec
+from .formal import State, ActionSpec, GuaranteeLevel
 from .reference_monitor import CaptureBasin
 
 
@@ -38,13 +67,46 @@ class HJBBarrierCheck:
 
 class ActiveHJBBarrier:
     """
-    Active safety barrier using HJB reachability.
+    Active HJB Barrier with k-step lookahead reachability (Heuristic, Incomplete)
     
-    Unlike passive monitoring, this barrier FORCES the system into Safe Hover
-    if violations are detected.
+    Guarantee Level: HEURISTIC
+    
+    This module provides heuristic detection of dangerous states within k lookahead
+    steps. It is NOT complete reachability analysis.
+    
+    Limitations:
+        1. **Exponential Complexity**: k-step reachability with n actions has
+           complexity O(n^k). This scales poorly. Recommended: k ≤ 3, n ≤ 10 actions.
+        
+        2. **Incomplete**: Only explores actions provided. Does not explore all
+           possible state space (which is infinite in general).
+        
+        3. **No Memoization**: Revisits states across branches. Can be optimized
+           with reachability caching, but not implemented.
+        
+        4. **Approximation**: Assumes actions are deterministic and have no
+           stochastic outcomes.
+    
+    Use Case:
+        Use for early-warning detection of immediate (1–3 step) dangers when
+        action set is small and bounded. Not suitable for long-horizon safety
+        guarantees or large action spaces.
+        
+        For formal reachability proofs, use external model checker (e.g., SPIN, TLA+).
     """
     
-    def __init__(self, basins: List[CaptureBasin], max_lookahead: int = 5):
+    def __init__(self, basins: List[CaptureBasin], max_lookahead: int = 3):
+        """
+        Initialize HJB barrier.
+        
+        Args:
+            basins: Capture basins to avoid
+            max_lookahead: Lookahead depth k. Complexity is O(|actions|^k).
+                          Recommended: k ≤ 3. Will warn if k > 5.
+        """
+        if max_lookahead > 5:
+            print(f"⚠️  HJB lookahead depth {max_lookahead} may be exponentially slow. "
+                  f"Consider k ≤ 3.")
         self.basins = basins
         self.max_lookahead = max_lookahead
     

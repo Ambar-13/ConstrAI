@@ -1,25 +1,36 @@
 """
-Gradient Tracker for Formal Safety Margins
-===========================================
+Gradient Tracker for Formal Safety Margins (Heuristic)
+=======================================================
 
-This module implements the "Jacobian of Safety" — formal computation of
+This module implements HEURISTIC "Jacobian of Safety" — estimation of
 how close each state variable is to violating an invariant.
 
-Key idea: For each state variable k and each invariant I, compute:
-    ∇ₖ I(s) := sensitivity score indicating how "critical" k is to I's satisfaction
+IMPORTANT: This analysis is NOT formally proven. It provides pragmatic
+heuristic guidance for LLM prompting and early warnings, but should NOT
+be used for safety-critical decisions.
+
+Key idea: For each state variable k and each invariant I, estimate:
+    ∇ₖ I(s) := heuristic sensitivity score indicating variable criticality
 
 This enables:
-  1. **Prioritization**: which variables matter most?
-  2. **Warning signals**: how close are we to invariant boundary?
-  3. **State pruning**: drop irrelevant variables from prompts
-  4. **Adaptive constraints**: tighten limits when approaching boundary
+  1. **Prioritization**: which variables matter most? (heuristic)
+  2. **Warning signals**: how close are we to invariant boundary? (heuristic)
+  3. **State pruning**: drop irrelevant variables from prompts (heuristic)
+  4. **Adaptive constraints**: tighten limits when approaching boundary (heuristic)
+
+Assumptions (required for reliability):
+  - Invariant predicates are pure functions (no side effects, non-deterministic)
+  - Invariants are approximately continuous near current state
+  - Perturbation magnitude is relevant to actual dynamics
+
+For formal invariant guarantees, use kernel's T3 (formal.py), NOT these heuristics.
 """
 
 from __future__ import annotations
 from dataclasses import dataclass, field
 from enum import Enum
 from typing import Callable, Dict, List, Optional, Tuple
-from .formal import State, Invariant
+from .formal import State, Invariant, GuaranteeLevel
 
 
 class SensitivityLevel(Enum):

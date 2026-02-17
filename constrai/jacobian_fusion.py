@@ -1,34 +1,57 @@
 """constrai.jacobian_fusion
 
-Jacobian-HJB Fusion: Authoritative Boundary Sensitivity Engine
+Jacobian-HJB Fusion: Boundary Sensitivity Engine (Heuristic)
 ==============================================================
 
-This module implements the formal Jacobian (∇ϕ) for constraint boundaries,
-computing the rate of change of safety margins with respect to state variables.
+This module provides HEURISTIC sensitivity analysis for constraint boundaries.
+It computes numerical perturbation-based scores indicating how close state
+variables are to violating invariants.
 
-Mathematical Foundation:
+IMPORTANT: The analyses in this module are not formally proven. They provide
+pragmatic heuristic guidance for LLM prompting and early-warning systems, but
+should NOT be used for safety-critical decisions. Those decisions are made by
+the formal kernel (formal.py) and reference monitor (reference_monitor.py).
 
-    Boundary Sensitivity Score(s_i) = ∫_{t}^{t+k} ∂s_i/∂Safety dt
+Mathematical Foundation (Heuristic):
 
-This integral measures how quickly a state variable moves toward a constraint
-violation. If a variable is N steps away from a "cliff," its Score spikes.
+    Boundary Sensitivity Score(s_i) ≈ (1 - |δ_violation|/ε) / 10
 
-Theorem JSF-1 (Jacobian Continuity):
-  For any Invariant I and state s, the sensitivity score S_I(s_i) is continuous
-  in s_i. If I(s) is violated at s*, then ∂I/∂s_i ≠ 0 for at least one s_i.
-  Proof: By continuity of constraint predicates and implicit function theorem.
+This is a HEURISTIC approximation that uses numerical perturbation to estimate
+how close a variable is to violating an invariant.
 
-Theorem JSF-2 (Boundary Proximity Detection):
-  If S_I(s_i) ≥ τ_critical for any (I, s_i) pair, then s_i is within the
-  "danger zone" (k steps from violation). The orchestrator must force s_i
-  into the LLM prompt and block Saliency-based skipping.
-  Proof: By integral Lipschitz bound on constraint evolution.
+Guarantee Classification:
 
-Application in ConstrAI:
-  1. GradientTracker computes S_I(s_i) for all (s_i, I) pairs
-  2. SaliencyEngine respects these scores (never skips critical variables)
-  3. Orchestrator forces critical variables into prompt
-  4. HJB barrier enforces Safe Hover when S spikes
+JSF-1 (Boundary Sensitivity Score):
+  Level: HEURISTIC (not proven; for diagnostic use only)
+  Scope: Applies only to continuous, deterministic invariant predicates
+  Method: Numerical differentiation via fixed perturbation magnitudes
+  Reliability: Best-effort guidance; may miss discontinuous boundaries
+  Assumptions: Invariant is pure function (no side effects, non-deterministic)
+  Limitations:
+    - Cannot handle discontinuous invariant surfaces
+    - Perturbation magnitude must be chosen heuristically
+    - Does not guarantee detection of all boundary violations
+
+JSF-2 (Boundary Proximity Detection):
+  Level: HEURISTIC (not proven; for diagnostic use only)
+  Scope: Detects variables within k-step perturbation distance
+  Method: Binary/linear search with fixed tolerances
+  Reliability: Heuristic detection; no formal completeness guarantee
+  Limitations:
+    - Does not detect multi-step boundary violations
+    - Score mapping is ad-hoc (not integral-based)
+    - May miss non-monotone invariant surfaces
+  Use Case: Prioritize critical variables for LLM prompt; NOT for safety decisions
+
+## Assumptions (Required for Analysis)
+
+  1. Invariant predicates are pure functions (no side effects, no randomness)
+  2. Invariants are approximately continuous near current state
+  3. Perturbation magnitude is relevant to actual state dynamics
+  4. Scoring thresholds (τ_critical, etc.) are application-calibrated
+
+For formal safety decisions, always use the kernel's T3 (Invariant Preservation
+theorem) in formal.py, NOT these heuristic scores.
 """
 
 from __future__ import annotations
@@ -38,16 +61,24 @@ from enum import Enum
 from typing import Dict, List, Optional, Tuple, Callable
 import math
 
-from .formal import State, Invariant
+from .formal import State, Invariant, GuaranteeLevel
 
 
 class BoundarySeverity(Enum):
-    """Severity levels based on Jacobian magnitude and proximity to violation."""
-    SAFE_DISTANT = 0       # S(s_i) < 0.1, constraint far away
-    SAFE_NOMINAL = 1       # 0.1 ≤ S(s_i) < 0.3, normal operation
-    WARNING_APPROACH = 2   # 0.3 ≤ S(s_i) < 0.6, approaching boundary
-    CRITICAL_IMMINENT = 3  # 0.6 ≤ S(s_i) < 0.9, very close
-    DANGER_CLIFF = 4       # S(s_i) ≥ 0.9, about to violate
+    """
+    Severity levels based on heuristic Jacobian magnitude and proximity.
+    
+    NOTE: These are NOT formally proven levels. They are pragmatic categories
+    derived from empirical testing and heuristic perturbation analysis.
+    
+    Actual safety decisions MUST use the formal kernel's invariant checks
+    (formal.py:T3), NOT these heuristic severity scores.
+    """
+    SAFE_DISTANT = 0       # Heuristic: perturbation > 10*ε from violation
+    SAFE_NOMINAL = 1       # Heuristic: 5*ε to 10*ε from violation
+    WARNING_APPROACH = 2   # Heuristic: 2*ε to 5*ε from violation
+    CRITICAL_IMMINENT = 3  # Heuristic: 0.5*ε to 2*ε from violation
+    DANGER_CLIFF = 4       # Heuristic: < 0.5*ε from violation (imminent)
 
 
 @dataclass(frozen=True)

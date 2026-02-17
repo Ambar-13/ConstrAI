@@ -418,10 +418,21 @@ class ReferenceMonitor:
         ifc_enabled: bool = True,
         cbf_enabled: bool = True,
         hjb_enabled: bool = True,
+        cbf_binary_search_tol: float = 1e-6,
+        cbf_max_iterations: int = 20,
     ):
+        if cbf_binary_search_tol <= 0:
+            raise ValueError(f"cbf_binary_search_tol must be > 0, got {cbf_binary_search_tol}")
+        if cbf_max_iterations < 1:
+            raise ValueError(f"cbf_max_iterations must be ≥ 1, got {cbf_max_iterations}")
+
         self.ifc_enabled = ifc_enabled
         self.cbf_enabled = cbf_enabled
         self.hjb_enabled = hjb_enabled
+
+        # CBF binary search parameters
+        self.cbf_binary_search_tol = cbf_binary_search_tol
+        self.cbf_max_iterations = cbf_max_iterations
 
         # IFC database: state_var -> label mapping
         self.ifc_labels: Dict[str, DataLabel] = {}
@@ -543,7 +554,7 @@ class ReferenceMonitor:
 
                     # Binary search for max safe value
                     best_safe_val = low
-                    for _ in range(20):  # ~log2(10^6) iterations
+                    for _ in range(self.cbf_max_iterations):
                         mid = (low + high) / 2.0
                         test_effect = Effect(effect.variable, effect.mode, mid)
                         test_state = state.with_updates({effect.variable: test_effect.apply(current_val)})
@@ -553,7 +564,7 @@ class ReferenceMonitor:
                             low = mid
                         else:
                             high = mid
-                        if high - low < self.cbf_binary_search_tol if hasattr(self, 'cbf_binary_search_tol') else 1e-6:
+                        if high - low < self.cbf_binary_search_tol:
                             break
 
                     if best_safe_val != float(effect.value):
@@ -621,14 +632,24 @@ class SafeHoverState:
         self.description = description
 
     def to_action(self) -> ActionSpec:
-        """Convert to a concrete no-op action."""
+        """
+        Convert to a concrete emergency action (no-op).
+        
+        Theorem T8 (Emergency Escape):
+          The SAFE_HOVER action is always executable (bypasses cost and step limits).
+          It has no effects and zero cost, allowing graceful system degradation
+          when normal actions are unsafe.
+        
+        Returns: ActionSpec marked as emergency action
+        """
         return ActionSpec(
             id="SAFE_HOVER",
-            name="Safe Hover",
+            name="Safe Hover (Emergency)",
             description=self.description,
-            effects=[],  # No state changes
-            cost=0.0,  # No budget consumption
+            effects=(),  # Immutable tuple; provably empty
+            cost=0.0,    # Emergency action: cost-free
             risk_level="low",
+            metadata={"emergency": True, "reason": "system_safe_hold"},
         )
 
 
