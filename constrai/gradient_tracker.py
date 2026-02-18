@@ -1,6 +1,4 @@
 """
-Gradient Tracker for Safety Margins (Heuristic)
-================================================
 
 Estimates how close each state variable is to violating each invariant,
 using finite-difference perturbation (a "Jacobian of Safety" approximation).
@@ -21,6 +19,30 @@ Reliability assumptions:
   - Invariant predicates are pure (no side effects, no randomness)
   - Invariants are approximately continuous near current state
   - The chosen ε is proportional to real dynamics
+Gradient Tracker for Formal Safety Margins (Heuristic)
+
+This module implements HEURISTIC "Jacobian of Safety" — estimation of
+how close each state variable is to violating an invariant.
+
+IMPORTANT: This analysis is NOT formally proven. It provides pragmatic
+heuristic guidance for LLM prompting and early warnings, but should NOT
+be used for safety-critical decisions.
+
+Key idea: For each state variable k and each invariant I, estimate:
+    ∇ₖ I(s) := heuristic sensitivity score indicating variable criticality
+
+This enables:
+  1. **Prioritization**: which variables matter most? (heuristic)
+  2. **Warning signals**: how close are we to invariant boundary? (heuristic)
+  3. **State pruning**: drop irrelevant variables from prompts (heuristic)
+  4. **Adaptive constraints**: tighten limits when approaching boundary (heuristic)
+
+Assumptions (required for reliability):
+  - Invariant predicates are pure functions (no side effects, non-deterministic)
+  - Invariants are approximately continuous near current state
+  - Perturbation magnitude is relevant to actual dynamics
+
+For formal invariant guarantees, use kernel's T3 (formal.py), NOT these heuristics.
 """
 
 from __future__ import annotations

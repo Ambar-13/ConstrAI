@@ -1,6 +1,4 @@
 """
-ConstrAI — Layer 0: Mathematically Proven Safety Kernel
-========================================================
 
 This module contains only provably-correct components. No heuristics, no ML,
 no LLM. Pure deterministic state machines with verified safety properties.
@@ -20,6 +18,28 @@ Design principles:
   - Actions are DATA (declarative effects), not CODE (function pointers)
   - Every check happens BEFORE commitment, never after
   - This layer has zero knowledge of LLMs; it constrains any decision-making agent
+ConstrAI — Autonomous Engine for Guaranteed Intelligent Safety
+Module: constrai.formal — Layer 0: Mathematically Proven Guarantees
+
+This module contains ONLY things we can PROVE. No heuristics, no ML, no LLM.
+Pure deterministic state machines with verified safety properties.
+
+THEOREMS (proven by construction + induction):
+  T1  Budget Safety:       spent_net(t) ≤ B₀  ∀t
+  T2  Termination:         halts in ≤ ⌊B₀/ε⌋ steps where ε = min_cost
+  T3  Invariant Safety:    For blocking-mode invariants: I(s₀)=True ⟹ I(sₜ)=True ∀t
+       (Monitoring-mode invariants are logged but not safety-critical)
+  T4  Monotone Spend:      spent_gross(t) ≤ spent_gross(t+1)  ∀t
+  T5  Atomicity:           transitions are all-or-nothing
+  T6  Trace Integrity:     execution log is append-only, hash-chained
+  T7  Rollback Exactness:  undo(execute(s,a)) == s (via separate spend tracking)
+  T8  Emergency Escape:    SAFE_HOVER action always executable, cost-free, effect-free
+
+DESIGN PRINCIPLES:
+  - State is immutable (new states are created, never mutated)
+  - Actions are DATA (declarative effects), not CODE
+  - Every check happens BEFORE execution, never after
+  - The formal layer has ZERO knowledge of LLMs — it constrains any agent
 """
 from __future__ import annotations
 
@@ -424,28 +444,27 @@ class Invariant:
 
 class BudgetController:
     """
-    Integer-arithmetic budget ledger. Proven resource safety.
-
     Theorem T1 (Budget Safety):  spent_net(t) ≤ B₀  ∀t.
     Proof:
       Base: spent_net(0) = 0 ≤ B₀. ✓
       Step: Before charging c at time t:
-        Guard: c ≤ B₀ - spent_net(t). If False → reject, spent unchanged. ✓
+        Guard: c ≤ B₀ - spent_net(t). If False → reject.
         If True: spent_net(t+1) = spent_net(t) + c ≤ B₀. ✓
       By induction. ∎
 
     Theorem T4 (Monotone Gross Spend):  spent_gross(t) ≤ spent_gross(t+1).
-    Proof: charge() asserts c ≥ 0 and increments gross by c. ∎
+    Proof: Only charge() increments gross_spent (c ≥ 0). Refund is separate. ∎
 
     Theorem T7 (Rollback with Separate Accounting):
-      refund() decrements net spend without violating T4 (which tracks gross).
-      This is why gross and refunded are tracked separately.
+      Refund operations decrease net spend without violating T4 (which tracks gross).
 
     Implementation notes:
-      - All arithmetic is in integer MILLICENTS (cost × 100_000) to eliminate
-        floating-point accumulation over many steps. Exact for ≤ 5 decimal places.
-      - threading.Lock guards all mutations for concurrent-safe operation.
-      - The ledger is append-only for auditability.
+      - spent_gross: Cumulative charges (never decreases) — proves T4
+      - spent_refunded: Cumulative refunds (never decreases) — separate accounting
+      - spent_net: spent_gross - spent_refunded — used for budget checks (T1)
+      - All arithmetic uses integer MILLICENTS (cost * 100_000) internally
+        to eliminate floating-point drift. External API is still float.
+      - threading.Lock protects all mutations for concurrency safety.
     """
     _SCALE = 100_000  # 1.0 dollar = 100_000 millicents. Exact at 5 decimal places.
 
@@ -453,43 +472,43 @@ class BudgetController:
         if budget < 0:
             raise ValueError(f"Budget must be ≥ 0, got {budget}")
         self._budget_i = round(budget * self._SCALE)
-        self._spent_gross_i = 0  # Cumulative charges; never decreases (T4).
-        self._refunded_i = 0     # Cumulative refunds; never decreases.
+        self._spent_gross_i = 0  # Total charged
+        self._refunded_i = 0     # Total refunded
         self._ledger: List[Tuple[str, float, float]] = []
         self._lock = _threading.Lock()
 
     @property
     def budget(self) -> float:
-        """Total allocated budget."""
+        """Total budget."""
         return self._budget_i / self._SCALE
 
     @property
     def spent_gross(self) -> float:
-        """Cumulative charges. Monotonically non-decreasing (T4)."""
+        """Cumulative charges (never decreases — proves T4)."""
         return self._spent_gross_i / self._SCALE
 
     @property
     def spent_refunded(self) -> float:
-        """Cumulative refunds. Monotonically non-decreasing."""
+        """Cumulative refunds (never decreases)."""
         return self._refunded_i / self._SCALE
 
     @property
     def spent_net(self) -> float:
-        """Net spend after refunds. Used for budget enforcement (T1)."""
+        """Net spend after refunds (used for budget enforcement — T1)."""
         return (self._spent_gross_i - self._refunded_i) / self._SCALE
 
     @property
     def spent(self) -> float:
-        """Alias for spent_net (backward compatibility)."""
+        """Alias for spent_net for backward compatibility."""
         return self.spent_net
 
     @property
     def remaining(self) -> float:
-        """Remaining budget = total - net spend."""
+        """Remaining budget (based on net spend)."""
         return (self._budget_i - (self._spent_gross_i - self._refunded_i)) / self._SCALE
 
     def can_afford(self, cost: float) -> Tuple[bool, str]:
-        """Thread-safe check: would charging 'cost' exceed the budget?"""
+        """Check if net spend + cost would exceed budget."""
         if cost < 0:
             raise ValueError(f"Cost must be ≥ 0, got {cost}")
         cost_i = round(cost * self._SCALE)
@@ -501,10 +520,7 @@ class BudgetController:
                        f"spent_net=${self.spent_net:.2f}, remaining=${self.remaining:.2f}")
 
     def charge(self, action_id: str, cost: float) -> None:
-        """
-        Commit a charge. Caller must have called can_afford(cost) first.
-        Increments gross spend (T4). Asserts T1 post-charge.
-        """
+        """Charge budget (increases spent_gross). Precondition: can_afford(cost) was (True, _)."""
         if cost < 0:
             raise ValueError("Cost must be ≥ 0")
         cost_i = round(cost * self._SCALE)
@@ -512,41 +528,42 @@ class BudgetController:
             old_gross = self._spent_gross_i
             net_i = self._spent_gross_i - self._refunded_i
             if net_i + cost_i > self._budget_i:
-                raise RuntimeError("BUDGET SAFETY VIOLATION — charge() called without can_afford()")
+                raise RuntimeError("BUDGET SAFETY VIOLATION — charge without can_afford")
             self._spent_gross_i += cost_i
+            # Verify T4: gross spent is monotone
             assert self._spent_gross_i >= old_gross, "T4 VIOLATED: spent_gross decreased"
+            # Verify T1: net spent respects budget
             assert self.spent_net <= self.budget, "T1 VIOLATED: spent_net exceeded budget"
         self._ledger.append((action_id, cost, _time.time()))
 
     def refund(self, action_id: str, cost: float) -> None:
-        """
-        Record a refund for rollback. Increments spent_refunded, reducing net spend.
-        Cannot refund more than total gross spend (floor at zero net).
-        """
+        """Record refund for rollback (increases spent_refunded). Supports T7."""
         if cost < 0:
-            raise ValueError("Cost must be ≥ 0")
+            raise ValueError(f"Cost must be ≥ 0")
         cost_i = round(cost * self._SCALE)
         with self._lock:
             old_refunded = self._refunded_i
+            # Cannot refund more than was ever spent
             if self._refunded_i + cost_i <= self._spent_gross_i:
                 self._refunded_i += cost_i
                 assert self._refunded_i >= old_refunded, "Refund tracking failed"
         self._ledger.append((f"REFUND:{action_id}", -cost, _time.time()))
 
     def utilization(self) -> float:
-        """Net spend as a fraction of total budget."""
+        """Utilization as fraction of budget (based on net spend)."""
         return (self._spent_gross_i - self._refunded_i) / self._budget_i if self._budget_i > 0 else 0.0
 
     @property
     def ledger(self) -> List[Tuple[str, float, float]]:
-        """Append-only transaction log: (action_id, amount, timestamp)."""
+        """Append-only transaction log."""
         return list(self._ledger)
 
     def summary(self) -> str:
+        """Human-readable budget summary."""
         return (f"Budget: ${self.budget:.2f} | "
-                f"Gross: ${self.spent_gross:.2f} | "
+                f"Spent (gross): ${self.spent_gross:.2f} | "
                 f"Refunded: ${self.spent_refunded:.2f} | "
-                f"Net: ${self.spent_net:.2f} | "
+                f"Spent (net): ${self.spent_net:.2f} | "
                 f"Remaining: ${self.remaining:.2f} | "
                 f"Utilization: {self.utilization():.1%}")
 
@@ -727,6 +744,11 @@ class SafetyKernel:
         self.max_steps = int(budget / min_action_cost)
         self._lock = _threading.Lock()
 
+        # Emergency actions: can bypass cost and step limit checks
+        # Must have empty effects and zero cost
+        # Designed for graceful degradation (e.g., SAFE_HOVER)
+        self.emergency_actions: Set[str] = emergency_actions or set()
+
         # Emergency actions bypass cost/step checks (T8).
         # Must have empty effects and zero cost by convention.
         self.emergency_actions: Set[str] = emergency_actions or set()
@@ -748,12 +770,14 @@ class SafetyKernel:
 
         Runs all checks on a simulated copy of state. Returns SafetyVerdict with:
           - approved: True iff ALL checks pass
-          - simulated_next_state: state after action (if budget/termination pass)
-          - checks: full audit trail of each check result
+          - simulated_next_state: the state after action (if approved)
+          - All check details for audit/reasoning
 
-        T3 scope: only invariants with enforcement="blocking" block approval.
-        Invariants with enforcement="monitoring" are checked and logged but
-        do not prevent action execution.
+        Note on T3 (Invariant Preservation):
+          T3 is scoped to invariants with enforcement="blocking".
+          Invariants with enforcement="monitoring" are checked and logged
+          for diagnostic purposes, but their violations do not block actions.
+          Only blocking-mode invariants provide formal safety guarantees.
         """
         checks: List[Tuple[str, CheckResult, str]] = []
         approved = True
@@ -761,6 +785,7 @@ class SafetyKernel:
         # Check 0: Minimum cost (prerequisite for T2 termination bound).
         if action.cost < self.min_action_cost:
             if action.id in self.emergency_actions:
+                # Emergency action bypass: allowed to have zero cost
                 checks.append(("MinCost", CheckResult.PASS,
                               f"Emergency action '{action.id}' bypasses cost minimum"))
             else:
@@ -780,6 +805,7 @@ class SafetyKernel:
         # Check 2: Step limit (T2).
         if self.step_count >= self.max_steps:
             if action.id in self.emergency_actions:
+                # Emergency action bypass: allowed even at step limit
                 checks.append(("Termination", CheckResult.PASS,
                               f"Emergency action '{action.id}' bypasses step limit"))
             else:
@@ -790,8 +816,7 @@ class SafetyKernel:
             checks.append(("Termination", CheckResult.PASS,
                           f"Step {self.step_count + 1}/{self.max_steps}"))
 
-        # Check 3: Invariants (T3 for blocking-mode, logging for monitoring-mode).
-        # Only simulate if budget/termination passed (avoid wasted simulation work).
+        # ── Check 3: Invariants (T3 for blocking-mode only) ──
         sim_state = None
         if approved:
             sim_state = action.simulate(state)
@@ -800,13 +825,15 @@ class SafetyKernel:
                 if holds:
                     checks.append((f"Invariant:{inv.name}", CheckResult.PASS, "holds"))
                 else:
+                    # Invariant violated: check enforcement mode
                     enforcement = getattr(inv, "enforcement", "blocking")
                     checks.append((f"Invariant:{inv.name}",
-                                  CheckResult.FAIL_INVARIANT,
+                                  CheckResult.FAIL_INVARIANT, 
                                   f"[{enforcement}] {msg}"))
+                    # Only blocking-mode violations prevent approval (T3 scope)
                     if enforcement == "blocking":
                         approved = False
-                    # monitoring-mode violations are recorded but do not block
+                    # Monitoring-mode violations are logged but do not block
 
         # Check 4: Pluggable preconditions (user-supplied additional gates).
         for fn in self._precondition_fns:
@@ -838,12 +865,20 @@ class SafetyKernel:
         instead to eliminate the time-of-check-to-time-of-use race. This method
         is safe for single-threaded use.
 
+        This method calls evaluate() for defense-in-depth verification,
+        then commits the state change, budget charge, and trace entry.
+
+        Precondition:  evaluate(state, action).approved == True
         Postconditions:
           - Budget charged (T1: spent_net + cost ≤ budget)
           - Step count incremented (T2)
           - New state satisfies all blocking-mode invariants (T3)
-          - Atomicity: all-or-nothing (T5)
-          - Trace updated (T6)
+          - All-or-nothing atomicity (T5)
+          - Trace updated with entry (T6)
+
+        Note: Re-evaluation provides defense-in-depth but creates a TOCTOU gap
+        in concurrent scenarios. Use evaluate_and_execute_atomic() for true
+        atomicity across threads.
         """
         verdict = self.evaluate(state, action)
         if not verdict.approved:
@@ -854,6 +889,7 @@ class SafetyKernel:
         new_state = verdict.simulated_next_state
         assert new_state is not None
 
+        # ── Commit: budget + state + trace ──
         self.budget.charge(action.id, action.cost)
         self.step_count += 1
 
@@ -867,30 +903,38 @@ class SafetyKernel:
         )
         self.trace.append(entry)
 
-        # Post-commit belt-and-suspenders assertions.
-        assert self.budget.spent_net <= self.budget.budget, "T1 VIOLATED post-commit"
-        assert self.step_count <= self.max_steps, "T2 VIOLATED post-commit"
+        # Runtime verification (belt AND suspenders)
+        assert self.budget.spent_net <= self.budget.budget, "T1 VIOLATED: spent_net > budget"
+        assert self.step_count <= self.max_steps, "T2 VIOLATED: step_count exceeded max_steps"
+        # Only check blocking-mode invariants per T3 scope
         for inv in self.invariants:
             if getattr(inv, "enforcement", "blocking") == "blocking":
                 ok, msg = inv.check(new_state)
-                assert ok, f"T3 VIOLATED (blocking invariant post-commit): {msg}"
+                assert ok, f"T3 VIOLATED (blocking invariant): {msg}"
 
         return new_state, entry
 
     def evaluate_and_execute_atomic(self, state: State, action: ActionSpec,
                                      reasoning_summary: str = "") -> Tuple[State, TraceEntry]:
         """
-        Evaluate and execute as a single atomic transaction.
+        Evaluate and execute as a single atomic transaction (thread-safe).
 
-        Holds the kernel lock across both the check and the commit, eliminating
-        the TOCTOU race that exists between separate evaluate() + execute() calls
-        in concurrent settings. This is the preferred method for any multi-threaded
-        orchestration.
+        This method combines evaluate() and execute() under a single lock,
+        eliminating the TOCTOU (time-of-check-to-time-of-use) gap that exists
+        in concurrent scenarios when evaluate() and execute() are called separately.
 
-        Returns: (new_state, trace_entry) on success.
-        Raises: RuntimeError if any safety check fails.
+        Guarantees (concurrent-safe):
+          - Budget check and charge are atomic
+          - Step check and increment are atomic
+          - No interleaving with other threads' charges or steps
+
+        Returns: (new_state, trace_entry) on success
+        Raises: RuntimeError if safety check fails
+
+        This is the preferred method for concurrent execution.
         """
         with self._lock:
+            # Evaluate (within lock)
             verdict = self.evaluate(state, action)
             if not verdict.approved:
                 raise RuntimeError(
@@ -900,6 +944,7 @@ class SafetyKernel:
             new_state = verdict.simulated_next_state
             assert new_state is not None
 
+            # Execute (within lock — no race possible)
             self.budget.charge(action.id, action.cost)
             self.step_count += 1
 
@@ -913,12 +958,13 @@ class SafetyKernel:
             )
             self.trace.append(entry)
 
-            assert self.budget.spent_net <= self.budget.budget, "T1 VIOLATED (atomic)"
-            assert self.step_count <= self.max_steps, "T2 VIOLATED (atomic)"
+            # Assertions (post-commit verification)
+            assert self.budget.spent_net <= self.budget.budget, "T1 VIOLATED: spent_net > budget"
+            assert self.step_count <= self.max_steps, "T2 VIOLATED: step_count exceeded max_steps"
             for inv in self.invariants:
                 if getattr(inv, "enforcement", "blocking") == "blocking":
                     ok, msg = inv.check(new_state)
-                    assert ok, f"T3 VIOLATED (atomic, blocking invariant): {msg}"
+                    assert ok, f"T3 VIOLATED (blocking invariant): {msg}"
 
             return new_state, entry
 

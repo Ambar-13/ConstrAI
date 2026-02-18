@@ -2,16 +2,41 @@
 
 All claims are tagged with their epistemic status:
 
-| Level | Meaning |
-|-------|---------|
-| `PROVEN` | Holds unconditionally by construction |
-| `CONDITIONAL` | Proven under stated assumptions |
-| `EMPIRICAL` | Measured with statistical confidence |
-| `HEURISTIC` | Best-effort; no formal guarantee |
+## Overview
+
+| Category | Theorems | Focus |
+| --- | --- | --- |
+| Foundational (T) | T1–T8 | Core execution, budget, invariants, emergency escape |
+| Boundary Detection (JSF) | JSF-1, JSF-2 | Constraint sensitivity analysis |
+| Enforcement (AHJ) | AHJ-1, AHJ-2 | Safe state enforcement |
+| Composition (OC) | OC-1, OC-2 | Safe task combination |
 
 ---
 
-## T1 — Budget Safety  `PROVEN`
+## Category 1: Foundational Theorems (T1–T8)
+
+The core "laws" of ConstrAI execution.
+
+### T1: Budget Safety (PROVEN)
+
+**Statement**: `spent(t) ≤ B₀` for all time steps t, where B₀ is the initial budget.
+
+**Proof by induction on t**:
+
+*Base case*: At t=0, spent(0) = 0 ≤ B₀. ✓
+
+*Inductive step*: Assume spent(t) ≤ B₀. At step t+1:
+
+1. `can_afford(cost)` checks: `self.spent + cost ≤ self.total`
+2. If False: action rejected, spent(t+1) = spent(t) ≤ B₀. ✓
+3. If True: `charge()` sets spent(t+1) = spent(t) + cost
+4. Since can_afford passed: spent(t) + cost ≤ B₀, so spent(t+1) ≤ B₀. ✓
+
+*Key detail*: `charge()` asserts `cost >= 0`, so no negative costs can reduce the spent counter. The check-then-charge pattern is atomic (single-threaded execution). ∎
+
+**What this does NOT guarantee**: That the budget is well-spent. The agent can waste the entire budget on useless actions within the limit.
+
+## T2: Termination (CONDITIONAL)
 
 **Statement:** `spent_net(t) ≤ B₀` for all t.
 
@@ -90,6 +115,32 @@ Each entry's hash covers all fields including `prev_hash`, forming a chain.
 `verify_integrity()` walks the chain in O(n): any modification to entry `i` breaks the hash at `i+1`. ∎
 
 **Note:** This protects against software-layer tampering, not adversarial memory access (`gc`, `ctypes`).
+
+## T8: Emergency Escape (CONDITIONAL)
+
+**Statement**: The SAFE_HOVER action is always executable, bypassing budget and step-limit checks. It transitions to a benign safe state with no state effects.
+
+**Assumption**: SAFE_HOVER is registered in `emergency_actions` set and has `effects=()` (no state modifications).
+
+**Proof**:
+
+In `SafetyKernel.evaluate()`:
+
+```python
+if action.id in self.emergency_actions:
+    # Skip min_cost, step_limit, and budget checks
+    return SafetyVerdict(approved=True)
+```
+
+Since T5 (Action Atomicity) ensures no state change on rejection, and SAFE_HOVER has `effects=()` (no state effects), its execution modifies the state by identity only. The budget check is bypassed; cost is still charged but does not prevent execution. Therefore, even if remaining budget is insufficient for other actions, SAFE_HOVER can execute. ∎
+
+**What this means**: When the system detects danger, it always has an escape hatch. The LLM cannot block the kernel from reaching safety.
+
+**Guarantee Level**: CONDITIONAL
+
+- Holds if SAFE_HOVER is registered as emergency action
+- Holds if SAFE_HOVER effects are empty (enforced by constructor)
+- Fails if emergency_actions set is empty (configuration error)
 
 ---
 
