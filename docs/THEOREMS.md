@@ -1,6 +1,6 @@
-# Theorems & Proofs
+# Formal Claims
 
-ConstrAI provides 13 formal theorems organized into 4 categories. Each is proven through construction and induction.
+All claims are tagged with their epistemic status:
 
 ## Overview
 
@@ -38,95 +38,83 @@ The core "laws" of ConstrAI execution.
 
 ## T2: Termination (CONDITIONAL)
 
-**Statement**: The execution loop halts in at most `⌊B₀/ε⌋` steps, where ε = `min_action_cost`.
+**Statement:** `spent_net(t) ≤ B₀` for all t.
 
-**Assumption**: ε > 0 (there exists a minimum action cost).
+**Proof** (induction on t):
+- Base: `spent_net(0) = 0 ≤ B₀`. ✓
+- Inductive step: Assume `spent_net(t) ≤ B₀`.
+  Before charging cost `c`, `can_afford(c)` checks that `spent_net(t) + c ≤ B₀`.
+  If false → action rejected, `spent_net` unchanged. ✓
+  If true → `spent_net(t+1) = spent_net(t) + c ≤ B₀`. ✓ ∎
 
-**Proof**:
+**Implementation:** Integer millicent arithmetic (× 100,000) avoids floating-point accumulation. A post-commit assertion fires on any violation.
 
-Each executed step charges at least ε to the budget (enforced by the kernel's min_cost check). After k steps, spent ≥ k·ε. When k·ε > B₀, no action can afford even ε, so the loop terminates.
+---
 
-Maximum steps: k_max = ⌊B₀/ε⌋.
+## T2 — Termination  `CONDITIONAL`
 
-The orchestrator also enforces `max_steps = ⌊B₀/ε⌋` as a hard cap. ∎
+**Statement:** The system halts in at most `⌊B₀ / ε⌋` steps.
 
-**What can break this**: If ε = 0, the bound is infinite. The constructor rejects ε ≤ 0, but if you bypass the constructor (don't), you lose this guarantee.
+**Assumptions:** All actions cost ≥ ε > 0 (`min_action_cost > 0`). Budget B₀ is finite.
 
-## T3: Invariant Preservation (PROVEN)
+**Proof:**
+After n steps, `spent_gross ≥ n × ε` (each step costs at least ε, T4).
+When `n > ⌊B₀/ε⌋`: remaining budget `< ε`.
+The budget check rejects any action costing ≥ ε. No actions can execute → halt. ∎
 
-**Statement**: If I(s₀) = True for all invariants I, then I(sₜ) = True for all reachable states sₜ.
+**Note:** Emergency actions (T8) bypass this check. They must have `cost = 0` and `effects = ()`.
 
-**Proof by induction on t**:
+---
 
-*Base case*: I(s₀) = True by assumption. ✓
+## T3 — Invariant Preservation  `PROVEN`
 
-*Inductive step*: Assume I(sₜ) = True. At step t+1:
+**Statement:** For every blocking-mode invariant `I`:
+`I(s₀) = True ⟹ I(sₜ) = True` for all t.
 
-1. Kernel simulates: `s' = action.simulate(sₜ)`
-2. For each invariant I: check `I(s')`.
-3. If any I(s') = False: reject action, sₜ₊₁ = sₜ, so I(sₜ₊₁) = I(sₜ) = True. ✓
-4. If all I(s') = True: commit, sₜ₊₁ = s', so I(sₜ₊₁) = True. ✓
+**Scope:** Only `enforcement="blocking"` invariants. Monitoring-mode invariants log violations but never block.
 
-*Edge case*: If an invariant's check function throws an exception, the kernel treats it as a violation (safe default). ∎
+**Proof** (induction on t):
+- Base: `I(s₀) = True` (checked at startup).
+- Inductive step: Assume `I(sₜ) = True`.
+  - `s' = action.simulate(sₜ)` (pure; no side effects).
+  - If `I(s') = False` → action rejected, `sₜ₊₁ = sₜ`, `I(sₜ₊₁) = True`. ✓
+  - If `I(s') = True` → committed, `sₜ₊₁ = s'`, `I(sₜ₊₁) = True`. ✓ ∎
 
-**Critical caveat**: T3 proves invariants hold on the *model* state. If the ActionSpec's effects don't match what actually happens in the real world (the spec-reality gap), invariants hold in the model but reality may diverge. This is addressed by Environment Reconciliation in the hardening layer, but only for probed variables.
+---
 
-## T4: Monotone Resources (PROVEN)
+## T4 — Monotone Gross Spend  `PROVEN`
 
-**Statement**: `spent(t) ≤ spent(t+1)` for all t.
+**Statement:** `spent_gross(t) ≤ spent_gross(t+1)` for all t.
 
-**Proof**: The only operation that modifies `spent` is `charge(id, cost)`, which asserts `cost >= 0` and sets `spent += cost`. Since cost ≥ 0, spent can only increase or stay the same. ∎
+**Proof:** `charge()` asserts `cost ≥ 0` before adding to `spent_gross`. A non-negative addition cannot decrease the total. ∎
 
-## T5: Action Atomicity (PROVEN)
+**Relevance to T7:** Rollback refunds `spent_net` via a separate `spent_refunded` counter, leaving `spent_gross` unchanged. T7 and T4 coexist without conflict.
 
-**Statement**: If an action is rejected, neither the state nor the budget is modified.
+---
 
-**Proof**:
+## T5 — Atomicity  `PROVEN`
 
-1. `evaluate()` simulates the action on a *copy* of the state.
-2. If simulation fails any check, `evaluate()` returns `SafetyVerdict(approved=False)`.
-3. `execute()` is only called if `approved=True`.
-4. `execute()` re-checks `can_afford()` before charging (defense in depth).
-5. State is immutable — `simulate()` creates a new State object, doesn't modify the original.
+**Statement:** Actions are all-or-nothing. Rejected actions leave state, budget, and step count unchanged.
 
-Therefore: rejected action → no state change, no budget change. ∎
+**Proof:**
+`evaluate()` simulates on a copy of state — no shared state mutated.
+`execute()` only commits after `evaluate()` returns `approved = True`.
+If `approved = False`, no commit occurs. ∎
 
-## T6: Trace Integrity (PROVEN)
+**Concurrency:** Use `evaluate_and_execute_atomic()` in concurrent settings to eliminate the TOCTOU race between `evaluate()` and `execute()`.
 
-**Statement**: The execution trace is append-only and tamper-evident via SHA-256 hash chaining.
+---
 
-**Proof**:
+## T6 — Trace Integrity  `PROVEN`
 
-Each `TraceEntry` is a frozen dataclass containing:
+**Statement:** The execution log is append-only and tamper-evident.
 
-- action_id, state_hash, cost, approved, timestamp
-- `prev_hash`: SHA-256 of the previous entry's hash
+**Proof:**
+`TraceEntry` is a frozen dataclass (immutable after construction).
+Each entry's hash covers all fields including `prev_hash`, forming a chain.
+`verify_integrity()` walks the chain in O(n): any modification to entry `i` breaks the hash at `i+1`. ∎
 
-`verify_integrity()` walks the chain and checks each entry's hash against its predecessor. If any entry is modified after creation, the hash chain breaks.
-
-The `entries` property returns a copy of the list, so external code cannot modify the internal trace. ∎
-
-**What this does NOT prevent**: An attacker with access to the Python process's memory can do anything. Hash chains protect against accidental corruption and simple tampering, not against a sophisticated attacker who rewrites the entire chain.
-
-## T7: Rollback Exactness (PROVEN)
-
-**Statement**: `rollback(s_prev, s_new, action) == s_prev` — undoing an action perfectly restores the prior state.
-
-**Proof**:
-
-1. State is immutable. `s_prev` still exists unmodified after `execute()` creates `s_new`.
-2. `rollback()` computes the inverse of each Effect:
-   - `set(key, val)` → restore from `s_prev.get(key)`
-   - `increment(key, n)` → `decrement(key, n)`
-   - `append(key, val)` → `remove(key, val)`
-   - `delete(key)` → `set(key, s_prev.get(key))`
-3. Since State is a deep-copied immutable dict, `s_prev` is exactly what it was before execution.
-
-Therefore: rollback produces a State equal to s_prev. ∎
-
-**Alternative proof**: Since State is immutable and s_prev is never garbage-collected during the orchestration loop, you can just use s_prev directly. The inverse-effects approach exists for cases where you don't want to keep every historical state in memory.
-
-**Note**: T7 was upgraded in v0.3.0 to use algebraic inverse morphisms (Effect.inverse()) instead of snapshot-based rollback, making it more suitable for formal dynamical systems reasoning.
+**Note:** This protects against software-layer tampering, not adversarial memory access (`gc`, `ctypes`).
 
 ## T8: Emergency Escape (CONDITIONAL)
 
@@ -156,91 +144,71 @@ Since T5 (Action Atomicity) ensures no state change on rejection, and SAFE_HOVER
 
 ---
 
-## Category 2: Boundary Detection (JSF-1, JSF-2)
+## T7 — Rollback Exactness  `PROVEN`
 
-Detects when state variables approach constraint violations.
+**Statement:** `rollback(execute(s, a)) == s`.
 
-### JSF-1: Jacobian Continuity
-
-**Statement**: For any invariant I(s) and state variable s_i, the sensitivity score S_I(s_i) is mathematically continuous. If I(s) is violated, then at least one partial derivative ∂I/∂s_i ≠ 0.
-
-**Proof**: By the implicit function theorem and continuity of constraint predicates. The sensitivity score measures the minimum perturbation needed to violate the invariant, which varies continuously with state. ∎
-
-**What it means**: Variables don't suddenly become unsafe. They approach unsafety gradually, so detection is reliable.
-
-### JSF-2: Boundary Proximity Detection
-
-**Statement**: If S_I(s_i) ≥ 0.6 for any variable-invariant pair, the system WILL report it as critical and force inclusion in the decision prompt.
-
-**Proof**: By Lipschitz bounds on constraint evolution. If the gradient indicates proximity to violation, small state steps remain dangerous, so the variable must be visible to the decision-maker. ∎
-
-**What it means**: No hidden constraint violations. Critical variables are always visible in the prompt.
+**Proof:**
+`State` is immutable (P1): once constructed, no State object is ever modified.
+`state_before` stored at commit time is preserved unchanged by the immutability guarantee.
+`apply_rollback()` returns `state_before` directly.
+Budget refund uses `budget.refund()`, decrementing `spent_net` without touching `spent_gross` (T4 preserved). ∎
 
 ---
 
-## Category 3: Enforcement (AHJ-1, AHJ-2)
+## T8 — Emergency Escape  `CONDITIONAL`
 
-Prevents actions that would violate safe state regions.
+**Statement:** The SAFE_HOVER emergency action is always executable.
 
-### AHJ-1: Safe Hover Completeness
+**Assumptions:**
+1. The action is registered via `kernel.register_emergency_action(id)`.
+2. The action has `cost = 0.0` and `effects = ()`.
 
-**Statement**: If state s enters any forbidden region (capture basin) where is_bad(s) = True, the system MUST NOT execute any further action from s. It either rolls back or signals Safe Hover (both non-bypassable).
-
-**Proof**: State immutability ensures prior safe state still exists. Rollback exactness (T7) guarantees recovery to that state. Check-before-commit ensures the prior state was valid. Therefore, entering unsafe state can always be undone to a provably safe configuration. ∎
-
-**What it means**: Once the system detects you're in danger, it stops. The LLM can't override it.
-
-### AHJ-2: Termination Guarantee
-
-**Statement**: Safe Hover mode itself will not loop indefinitely. The system will either recover (via rollback) or halt.
-
-**Proof**: Rollback is deterministic (T7). State transitions are finite in reachable space. Capture basins are finite predicates. Therefore, the exhaustive sequence of rollback attempts is bounded. ∎
-
-**What it means**: Safe Hover doesn't create infinite loops. If you're stuck, the system knows and stops.
+**Proof:**
+Emergency actions bypass Check 0 (min cost) and Check 2 (step limit).
+With `cost = 0.0`, `can_afford()` always returns True.
+With `effects = ()`, `simulate()` returns an identical state, passing all invariant checks trivially. ∎
 
 ---
 
-## Category 4: Composition (OC-1, OC-2)
+## Reference Monitor Guarantees
 
-Combines verified tasks without re-verification.
+### M1 — IFC Lattice  `DETERMINISTIC`
 
-### OC-1: Morphism Preservation
+Data flows only to sinks at equal or higher security level (`PUBLIC ⊑ INTERNAL ⊑ PII ⊑ SECRET`). Violations blocked by `ReferenceMonitor.enforce()`.
 
-**Statement**: If Task A is verified with invariants I_A, and Task B is verified with invariants I_B, and the output of A satisfies the input requirements of B, then the composition A∘B is automatically verified with invariants I_A ∧ I_B.
+### M2 — CBF Barrier  `DETERMINISTIC`
 
-**Proof by induction**:
+`h(s_{t+1}) ≥ (1 - α) × h(s_t)` enforced at each step, where h(s) is the distance-to-boundary function. Bounds the approach rate to resource limits.
 
-- Base: A verified → I_A holds after executing A
-- Step: Assume I_A holds. B's preconditions are satisfied (interface match). B verified → I_B holds after executing B. Therefore I_A ∧ I_B both hold after composition. ∎
+### M3 — QP Minimality  `DETERMINISTIC`
 
-**What it means**: You can chain verified tasks without re-checking everything.
-
-### OC-2: Composition Reusability
-
-**Statement**: Given a verified library of n tasks, any composition of k tasks is automatically verified if interface signatures match. This requires O(1) interface checks, not O(k²) re-verification.
-
-**Proof**: By OC-1 and transitivity. Each morphism in the composition chain preserves invariants automatically, so no new verification is needed. ∎
-
-**What it means**: Build complex workflows from simple verified pieces. No verification tax as you scale to hundreds or thousands of tasks.
+When action parameters violate M2, the QP projector finds the minimum-norm modification that restores safety. The repaired action is the closest safe action to the original.
 
 ---
 
-## Limitations & Caveats
+## Composition Theorems
 
-1. **Spec-Reality Gap**: T3 (Invariant Preservation) proves invariants hold on the model state. If the ActionSpec effects don't match what actually happens in the real world, the model diverges. Environment Reconciliation in the hardening layer helps, but only for probed variables.
+### OC-1 — Compositional Safety  `CONDITIONAL`
 
-2. **LLM Input**: These theorems say nothing about whether the LLM will make good decisions. They guarantee the framework won't let bad decisions execute. The LLM is free to propose anything.
+**Statement:** `Verified(A) ∧ Verified(B) ∧ compatible(A, B) ⟹ Verified(A∘B)`.
 
-3. **Single-Process**: Theorems assume single-agent, single-process execution. Multi-process coordination across machines is not covered.
+Interface compatibility: A's output interface must cover B's required inputs. Postconditions of A must satisfy preconditions of B (checked semantically). The composed task inherits both verification certificates.
 
-4. **Attack Model**: Theorems assume the kernel code itself is trustworthy. If an attacker can modify the kernel or access the process memory, all bets are off.
+### OC-2 — Incremental Verification  `CONDITIONAL`
+
+**Statement:** Verifying k-task compositions requires O(k) interface checks, not O(k²) re-verification.
+
+Each task is verified once. Composition checks only interface compatibility. Re-running the full safety kernel is not required.
 
 ---
 
-## Additional Safety Properties
+## Heuristic Claims
 
-For details on hardening properties (H1–H7), see VULNERABILITIES.md.
+### JSF-1, JSF-2 — Boundary Sensitivity  `HEURISTIC`
 
-For implementation details, see ARCHITECTURE.md.
+`GradientTracker` estimates which variables are near invariant boundaries via finite-difference perturbation. Diagnostic signal only; not safety enforcement. May miss nonlinear or cross-variable constraint interactions.
 
-For API usage, see API.md.
+### AHJ-1, AHJ-2 — Active HJB Reachability  `HEURISTIC`
+
+k-step lookahead to detect capture basins. Incomplete — bounded depth, finite action set. For complete reachability proofs, use TLA+ or SPIN.

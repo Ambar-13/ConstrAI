@@ -6,7 +6,7 @@ long_description = (this_directory / "README.md").read_text(encoding="utf-8")
 
 setup(
     name="constrai",
-    version="0.2.0",
+    version="0.3.0",
     author="Ambar",
     description="Formal safety framework for AI agents with provable guarantees",
     long_description=long_description,

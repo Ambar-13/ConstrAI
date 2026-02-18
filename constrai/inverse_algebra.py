@@ -1,18 +1,21 @@
 """
-Inverse Effect Algebra (T7 Realization)
-========================================
+Inverse Effect Algebra — T7 Realization
+=========================================
 
-This module provides the machinery to automatically compute and apply
-inverse effects, enabling proper rollback and undo semantics.
+Automatically computes and applies inverse effects to enable exact rollback.
 
-Key theorem (T7): For every action a and state s, there exists an inverse
-action a_inv such that:
-    a_inv.simulate(a.simulate(s)) == s
+Theorem T7: undo(execute(s, a)) == s.
 
-This is essential for:
-  1. True rollback (not just identity semantics)
-  2. Recovery from bad states
-  3. Compositional reasoning about state reversibility
+Proof strategy used here:
+  State is immutable (formal.py §1). The snapshot state_before is stored
+  alongside the executed action. Rollback applies inverse effects computed
+  by diffing state_before and state_after. Because State is immutable,
+  state_before is guaranteed to be unmodified and can be returned directly.
+
+Use this module for:
+  - Single-step rollback after a bad action
+  - Recovery from capture basins (HJB barrier)
+  - Compositional reasoning about reversibility of action sequences
 """
 
 from __future__ import annotations

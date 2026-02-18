@@ -1,472 +1,375 @@
 # ConstrAI
 
-Formal safety framework for AI agents. Math constrains what the agent can do, the LLM decides what it should do, neither can bypass the other.
+**Formal safety framework for autonomous AI agents.**
 
-## Why this exists
-
-Current AI agent frameworks enforce safety through prompts ("please don't do anything dangerous") or post-hoc filtering. Both fail under adversarial conditions. ConstrAI enforces safety through state-transition math that runs *before* any action executes. The LLM cannot talk its way past the kernel.
-
-**The key difference**: safety overhead is zero tokens. No system prompt bloat, no guardrail prompts. The constraints are in the execution loop, not in the context window.
-
-## How It Works
-
-ConstrAI uses three layers to keep agents safe:
-
-1. **State & Actions** — Everything is immutable data, not code
-   - States are snapshots you can't modify directly
-   - Actions declare what they'll change, not how they'll do it
-   - Effects are composable and reversible
-
-2. **Safety Checks** — Multiple verification layers
-   - Budget tracking: can't exceed spending limit
-   - Invariant checking: safety properties always held
-   - Rollback capability: undo any action that went wrong
-   - Reference monitor: enforces information flow and constraints
-
-3. **Execution** — Check before committing
-   - Simulate the action first (on a copy)
-   - Verify it's safe
-   - Only then apply to real state
-   - Record what was done so it can be undone
-
-## Threat Model & Assumptions
-
-These guarantees hold under the following assumptions:
-
-- **The LLM is untrusted.** It can hallucinate, lie, or return garbage. ConstrAI treats it as potentially unreliable.
-- **The ConstrAI kernel is trusted.** If an attacker has write access to the kernel code itself, all bets are off. This is the same assumption operating systems make.
-- **ActionSpecs are human-authored and correct.** If a spec says "create file" but actually deletes things, the kernel protects the model, not the system.
-- **Single-agent, single-process.** Concurrent access is protected by locks, but multi-agent coordination across processes is not implemented.
-- **Budget checks work.** All budget checks happen before execution (with invariant checks on a simulated state).
-
-If any of these assumptions are violated, specific guarantees may not hold. See [VULNERABILITIES.md](docs/VULNERABILITIES.md) for the full breakdown.
-
-## Core Guarantees
-
-ConstrAI provides 7 formal theorems. Detailed proofs in [THEOREMS.md](docs/THEOREMS.md).
-
-| # | Theorem | What It Means |
-|---|---------|--------------|
-| T1 | Budget Safety | You cannot spend more than your budget, ever |
-| T2 | Termination | Execution will eventually stop (won't loop forever) |
-| T3 | Invariant Preservation | Safety properties are maintained at every step |
-| T4 | Monotone Resources | Spending only increases, never decreases |
-| T5 | Atomicity | Rejected actions don't change anything |
-| T6 | Trace Integrity | Execution log cannot be tampered with |
-| T7 | Rollback Exactness | Undo always restores the exact previous state |
-
-**Conditional guarantees** (hold if checks are correct): temporal dependencies, environment reconciliation, goal verification.
-
-**Measured properties** (tested but not formally proven): attestation is harder to game with multiple checks; dependency discovery reduces failures.
-
-## What's New (v0.3.0)
-
-Three new safety systems:
-
-1. **Boundary Detection** — Knows when variables are getting close to constraint violations
-2. **Enforcement Barriers** — Actively prevents dangerous actions before they execute
-3. **Task Composition** — Combines verified subtasks safely without re-checking everything
-
-See [SOFT_GAPS_FIXED.md](SOFT_GAPS_FIXED.md) for technical details.
-
-## Architecture
+ConstrAI sits between an LLM and the real world. Before any action executes, it runs a deterministic safety kernel that proves the action cannot exceed the budget, violate any declared invariant, or corrupt the audit log. The LLM reasons freely. The math decides what executes.
 
 ```
-┌─────────────────────────────────────────────┐
-│                Orchestrator                 │
-│  ┌───────────────────────────────────────┐  │
-│  │ LLM (pluggable: Claude, GPT, local)   │  │
-│  │  Receives: decision prompt             │  │
-│  │  Returns: JSON action                  │  │
-│  ├───────────────────────────────────────┤  │
-│  │ Reasoning Engine                      │  │
-│  │  • Track beliefs about state           │  │
-│  │  • Compute action value               │  │
-│  │  • Handle dependencies                │  │
-│  ├───────────────────────────────────────┤  │
-│  │ Safety Kernel (formal, non-bypassable)│  │
-│  │  Budget, Invariants, Rollback, etc    │  │
-│  ├───────────────────────────────────────┤  │
-│  │ Reference Monitor                     │  │
-│  │  • Information flow control           │  │
-│  │  • Resource barrier functions         │  │
-│  │  • Action repair via QP               │  │
-│  └───────────────────────────────────────┘  │
-└─────────────────────────────────────────────┘
+LLM proposes action
+      ↓
+  Safety Kernel  ←── proven: T1–T8
+      ↓
+Execute or Reject
 ```
 
-**Key Design**: Every action is checked before execution. The LLM proposes, the kernel verifies, only then we execute.
+---
 
-## API Overview
+## Why
 
-### Create a State
+Current approaches to agent safety are either too weak or too brittle:
+
+- **Prompt-based guardrails** — "please don't do bad things" — can be forgotten, hallucinated past, or ignored.
+- **Post-hoc filters** — reviewing output after decisions are made — fires after the damage.
+- **RLHF alignment** — shapes what the model *wants*, not what it *can* do.
+
+ConstrAI enforces safety at the **execution layer**. The LLM produces a decision; the kernel decides whether that decision executes. Neither can bypass the other.
+
+---
+
+## Core guarantees
+
+Eight theorems, proven by construction and induction, hold for every execution:
+
+| Theorem | Statement | Status |
+|---------|-----------|--------|
+| T1 | `spent(t) ≤ budget` for all t | Proven |
+| T2 | Halts in ≤ ⌊budget/min\_cost⌋ steps | Conditional |
+| T3 | Every declared invariant holds on every reachable state | Proven |
+| T4 | Gross spend is monotonically non-decreasing | Proven |
+| T5 | Actions are atomic: rejected actions leave state unchanged | Proven |
+| T6 | The execution log is append-only and SHA-256 hash-chained | Proven |
+| T7 | `rollback(execute(s, a)) == s` exactly | Proven |
+| T8 | The emergency escape action is always executable | Conditional |
+
+**What these proofs cover:** the formal model — state, budget, trace, and declared invariants.
+
+**What they don't cover:** the gap between your ActionSpec and what actually happens in the world (addressed by environment reconciliation), LLM decision quality, and multi-agent coordination.
+
+---
+
+## Quick start
 
 ```python
-from constrai import State
-
-# Create initial state
-state = State({"balance": 100, "deployed": False})
-
-# Access values
-balance = state.get("balance")  # Returns 100
-
-# Create modified state (original unchanged)
-new_state = state.with_updates({"balance": 95})
-```
-
-### Define Actions
-
-```python
-from constrai import ActionSpec, Effect
-
-action = ActionSpec(
-    id="spend",
-    name="Spend money",
-    description="Reduce balance by amount",
-    effects=(
-        Effect("balance", "decrement", 50),  # balance -= 50
-    ),
-    cost=1.0,
-    risk_level="medium"
-)
-
-# Simulate what would happen
-next_state = action.simulate(state)
-print(next_state.get("balance"))  # 50
-```
-
-### Define Safety Rules
-
-```python
-from constrai import Invariant, CaptureBasin
-
-# Invariant: safety property that must hold
-invariant = Invariant(
-    name="budget_safe",
-    predicate=lambda s: s.get("balance", 0) >= 0,
-    description="Balance must never be negative"
-)
-
-# Capture basin: region to avoid
-danger_zone = CaptureBasin(
-    name="bankruptcy",
-    is_bad=lambda s: s.get("balance", 0) < 0,
-    max_steps=5
-)
-```
-
-### Create a Task
-
-```python
-from constrai import TaskDefinition
+from constrai import TaskDefinition, State, ActionSpec, Effect, Invariant, Orchestrator
 
 task = TaskDefinition(
-    goal="Spend exactly 75 units",
-    initial_state=State({"balance": 100}),
-    available_actions=[action1, action2, action3],
-    invariants=[invariant],
-    budget=20.0,  # Max cost allowed
-    goal_predicate=lambda s: s.get("balance") == 25,
-    capture_basins=[danger_zone]
-)
-```
-
-### Execute with an LLM
-
-```python
-from constrai import Orchestrator
-
-# Create orchestrator with your LLM client
-orch = Orchestrator(task, llm_client=your_llm)
-
-# Run it
-result = orch.execute_task(max_steps=30)
-
-print(f"Success: {result.goal_achieved}")
-print(f"Steps taken: {result.step_count}")
-print(f"Budget used: {result.spent}")
-```
-
-## How Safety Checks Work
-
-When you execute an action, ConstrAI does this:
-
-```
-1. Check Boundaries
-   └─ Which variables are close to constraint violations?
-
-2. Enforce Barriers
-   └─ Would this action enter a forbidden region?
-
-3. Reference Monitor
-   └─ Information flow: can data flow to this variable?
-   └─ Resource limits: would this exceed budget?
-   └─ Repair if needed: nudge parameters to be safe
-
-4. Simulate Action
-   └─ Apply effects to a copy of state
-   └─ Check invariants on the result
-   └─ Is the next state valid?
-
-5. Execute (if all checks pass)
-   └─ Apply effects to real state
-   └─ Record what was done for potential undo
-
-6. Observe
-   └─ Update beliefs about what happened
-   └─ Log for audit trail
-```
-
-If any check fails, the action is rejected and state is unchanged.
-
-## Testing & Guarantees
-
-All 7 theorems are tested:
-
-```bash
-# Run all tests
-python -m pytest tests/ -v
-
-# Check specific system
-python -m pytest tests/test_soft_gaps_fixed.py -v  # Latest features
-python -m pytest tests/test_constrai.py -v          # Core system
-```
-
-**Current status**: 44 tests passing, 0 failures
-
-**No breaking changes**: All existing code continues to work
-
-## Documentation
-
-- **[THEOREMS.md](docs/THEOREMS.md)** — Detailed proofs of all 7 theorems
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)** — System design and components
-- **[VULNERABILITIES.md](docs/VULNERABILITIES.md)** — Security assumptions and limitations
-- **[API.md](docs/API.md)** — Complete API reference
-- **[REFERENCE_MONITOR.md](docs/REFERENCE_MONITOR.md)** — Safety enforcement details
-- **[SOFT_GAPS_FIXED.md](SOFT_GAPS_FIXED.md)** — New boundary detection and enforcement features
-
-## Example: Deploying a Service Safely
-
-```python
-from constrai import (
-    State, Effect, ActionSpec, Invariant,
-    TaskDefinition, Orchestrator, CaptureBasin
+    goal="Process 10 records",
+    initial_state=State({"processed": 0, "errors": 0}),
+    available_actions=[
+        ActionSpec(
+            id="process_batch",
+            name="Process Batch",
+            description="Process the next 5 records",
+            effects=(
+                Effect("processed", "increment", 5),
+            ),
+            cost=2.0,
+            reversible=True,
+        ),
+    ],
+    invariants=[
+        Invariant(
+            "max_errors",
+            lambda s: s.get("errors", 0) <= 3,
+            description="Abort if error rate is too high",
+            enforcement="blocking",
+        ),
+    ],
+    budget=20.0,
+    goal_predicate=lambda s: s.get("processed", 0) >= 10,
 )
 
-# Define what the system can do
-actions = [
-    ActionSpec(
-        id="build",
-        name="Build service",
-        description="Compile source code",
-        effects=(Effect("built", "set", True),),
-        cost=10.0
-    ),
-    ActionSpec(
-        id="test",
-        name="Run tests",
-        description="Execute test suite",
-        effects=(Effect("tested", "set", True),),
-        cost=5.0
-    ),
-    ActionSpec(
-        id="deploy",
-        name="Deploy",
-        description="Ship to production",
-        effects=(Effect("deployed", "set", True),),
-        cost=15.0,
-        risk_level="high"
-    ),
-]
-
-# Define safety rules
-invariants = [
-    Invariant(
-        "test_before_deploy",
-        lambda s: not s.get("deployed") or s.get("tested"),
-        "Cannot deploy without testing"
-    ),
-]
-
-# Define forbidden states
-danger_zones = [
-    CaptureBasin(
-        "untested_deploy",
-        is_bad=lambda s: s.get("deployed") and not s.get("tested"),
-        max_steps=1
-    ),
-]
-
-# Create task
-task = TaskDefinition(
-    goal="Successfully deploy service",
-    initial_state=State({
-        "built": False,
-        "tested": False,
-        "deployed": False,
-        "cost": 0.0
-    }),
-    available_actions=actions,
-    invariants=invariants,
-    capture_basins=danger_zones,
-    budget=50.0,
-    goal_predicate=lambda s: s.get("deployed", False),
-    dependencies={
-        "test": [("build", "Need to build first")],
-        "deploy": [("test", "Need to test first")],
-    }
-)
-
-# Run it
-orch = Orchestrator(task, llm_client)
-result = orch.execute_task(max_steps=50)
-
-if result.goal_achieved:
-    print(f"✓ Service deployed in {result.step_count} steps")
-else:
-    print(f"✗ Deployment failed: {result.failure_reason}")
-```
-
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for how to contribute.
-
-## License
-
-ConstrAI is released under the Apache 2.0 License. See [LICENSE](LICENSE) for details.
-        "deploy": [("test", "Must test before deploying")],
-    },
-)
-
-engine = Orchestrator(task)  # Uses MockLLM by default
+engine = Orchestrator(task)
 result = engine.run()
 print(result.summary())
 ```
 
-To use a real LLM, implement one method:
+No LLM API key needed — the built-in mock adapter drives the execution. Plug in a real LLM via the `llm=` parameter:
 
 ```python
-class MyLLM:
-    def complete(self, prompt: str, system_prompt: str = "",
-                 temperature: float = 0.3, max_tokens: int = 2000) -> str:
-        # Call your LLM, return the text response
-        ...
+class AnthropicAdapter:
+    def __init__(self, client):
+        self.client = client
 
-engine = Orchestrator(task, llm=MyLLM())
+    def complete(self, prompt, system_prompt="", temperature=0.3, max_tokens=2000):
+        msg = self.client.messages.create(
+            model="claude-opus-4-6",
+            max_tokens=max_tokens,
+            system=system_prompt,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        return msg.content[0].text
+
+engine = Orchestrator(task, llm=AnthropicAdapter(anthropic_client))
 ```
 
-See `examples/claude_integration.py` for a working Anthropic Claude adapter.
+---
 
-## How the kernel works (30 seconds)
+## Installation
 
-1. LLM selects an action (from structured prompt with pre-computed values)
-2. Kernel **simulates** the action on an immutable copy of state
-3. Checks: budget sufficient? All invariants hold on simulated state? Dependencies met?
-4. If **any** check fails → reject. State and budget unchanged. (T5)
-5. If **all** pass → commit. Charge budget, apply state, append to hash-chained trace.
-
-The LLM never touches the state directly. It proposes; the kernel disposes.
-
-## Test results
-
-```
-Core theorems (T1–T7) + integration + adversarial:   69/69
-Chaos fuzzer (45 attack vectors):                     45/45
-v2 hardening (5 vulnerability fixes):                 41/41
-Monte Carlo (1000 random tasks):                      1000/1000 budget safe
-                                                      1000/1000 invariant safe
-                                                      1000/1000 terminated
-                                                      1000/1000 trace integrity
+```bash
+pip install constrai
 ```
 
-The chaos fuzzer tests: hallucinated actions, budget overflow, invariant evasion, state poisoning, trace tampering, success cheating, resource exhaustion, 6 malicious LLM personalities, dependency bypass, type confusion, resource lifecycle violations, discovery poisoning, and 1000 randomized attack scenarios.
+Optional extras:
 
-##NOTE
-Current implementation works as good as the invariant. The well define dthe invariants are, the better the safety. Next version will focus on defining common invariants, helping users make well-defined invariants, and testing the invariants.
+```bash
+pip install constrai[anthropic]   # Anthropic SDK
+pip install constrai[openai]      # OpenAI SDK
+pip install constrai[dev]         # pytest
+```
 
-## Safety Evaluation
+---
 
-ConstrAI was evaluated against an internal adversarial evaluation suite covering 63 actions across 6 agent types and 39 attack vectors:
+## Architecture
 
-| Metric | Result |
-|--------|:---:|
-| **Safety Rate** | **89.7%** (35/39 attacks blocked) |
-| **False Positives** | **0** (no legitimate actions blocked) |
-| **Task Completion** | **100%** |
-| **Precision** | **100%** |
-| **Recall** | **89.7%** |
-| **F1 Score** | **94.6%** |
-| **Avg Latency** | **0.061ms** per check |
-| **Throughput** | **45,613 checks/sec** |
+ConstrAI has four layers. Each layer can only constrain the layers above it — not bypass them.
 
-**Agents tested:**
-- FileSystemAgent (file ops, path traversal, credential theft)
-- WebRequestAgent (exfiltration, SSRF, DNS covert channels)
-- CodeExecutionAgent (privilege escalation, reverse shells)
-- DataAccessAgent (SQL injection, PII extraction)
-- MultiStepAgent (chained multi-step attacks)
-- EvasionAgent (obfuscation, base64 encoding, semantic evasion)
+```
+┌─────────────────────────────────────────────────────┐
+│  Layer 3 — Hardening                                │
+│  Environment reconciliation, temporal dependencies, │
+│  subprocess sandboxing, multi-dimensional attestors │
+├─────────────────────────────────────────────────────┤
+│  Layer 2 — Orchestrator                             │
+│  Main execution loop, LLM interface, fallback logic │
+├─────────────────────────────────────────────────────┤
+│  Layer 1 — Reasoning Engine                         │
+│  Bayesian beliefs, causal graph, action valuation   │
+├─────────────────────────────────────────────────────┤
+│  Layer 0 — Safety Kernel          [PROVEN T1–T8]   │
+│  Immutable state, declarative effects, budget,      │
+│  invariant checks, hash-chained trace               │
+└─────────────────────────────────────────────────────┘
+```
 
-**Threat coverage:** Data exfiltration, sandbox escape, privilege escalation, command injection, PII leaks, denial of service, path traversal, resource abuse, prompt injection.
+### Layer 0: Safety Kernel
 
-**Key finding:** The 4 missed attacks (50% safety on EvasionAgent) are adversarial evasion techniques (string concatenation, base64 payloads, `getattr` dispatch) that bypass static pattern matching. The kernel's invariant checking has **zero known bypasses** — all failures are in the classification layer, which is modular and upgradeable.
+The innermost, non-bypassable gate. For each proposed action:
 
-See `safety_evaluation/constrai_safety_evaluation.py`; raw outputs are included in `safety_evaluation/evaluation_results_raw.json`.
-See `safety_evaluation/Evaluation_report.md` for detailed breakdown, per-agent metrics, and architectural analysis.
+1. Check minimum cost (T2 prerequisite)
+2. Check budget (T1)
+3. Check step limit (T2)
+4. Simulate action on a copy of state — no side effects during checking
+5. Check all blocking-mode invariants on the simulated result (T3)
+6. If everything passes: commit atomically (charge budget, update state, append trace, T5)
+7. If anything fails: reject — state and budget unchanged (T5)
+
+**Key design choice — actions are data, not code:**
+
+```python
+# Wrong: action as a function (cannot be formally checked before execution)
+def deploy():
+    subprocess.run(["kubectl", "apply", ...])
+
+# Right: action as a declarative spec (simulated before execution)
+ActionSpec(
+    id="deploy",
+    effects=(Effect("deployed", "set", True),),
+    cost=10.0,
+)
+```
+
+Data can be simulated, diffed, inspected, and inverted. Code cannot.
+
+### Layer 1: Reasoning Engine
+
+Structured intelligence that informs the LLM rather than blindly deferring to it:
+
+- **Bayesian beliefs:** Beta(α, β) posterior for each action's success probability, updated after every outcome. Supports decay for non-stationary environments.
+- **Causal graph:** DAG of action dependencies. Blocked actions are never offered to the LLM.
+- **Action value computation:** Multi-dimensional score per action — expected progress, information gain, cost ratio, risk, opportunity cost. The LLM reasons over computed analysis, not raw action lists.
+- **Integral Sensitivity Filter:** Prunes state variables from the LLM prompt by computing which variables the available actions actually affect, reducing token usage without hiding safety-relevant data from the kernel.
+
+### Layer 2: Orchestrator
+
+The main execution loop:
+
+```
+while not done:
+    available = affordable actions with satisfied dependencies
+    values    = multi-dimensional value for each action
+    response  = LLM decision (or dominant-strategy skip if margin is large)
+    verdict   = kernel.evaluate(chosen_action)
+    if approved:
+        state, entry = kernel.execute(chosen_action)
+        update beliefs, causal graph, progress monitor
+    else:
+        record rejection, update failure beliefs
+    check: goal achieved? budget exhausted? stuck? too many failures?
+```
+
+If the LLM fails (timeout, parse error, hallucinated action ID), the orchestrator falls back to the highest-value READY action. Execution never stalls on an LLM failure.
+
+### Layer 3: Hardening
+
+Practical fixes for adversarial and real-world deployment conditions:
+
+| Mechanism | What it prevents |
+|-----------|-----------------|
+| `SubprocessAttestor` | Command injection via shell metacharacters; binary allowlist enforced |
+| `TemporalCausalGraph` | "Provisioned but not ready" race conditions via readiness probes with exponential backoff |
+| `CostAwarePriorFactory` | First-strike budget waste; expensive actions start with pessimistic priors until explicitly authorized |
+| `EnvironmentReconciler` | Model drift; halts if live environment probes diverge from model state |
+| `MultiDimensionalAttestor` | Reward hacking; requires all quality dimensions to pass simultaneously |
+
+---
+
+## Advanced: optional safety layers
+
+These run before the formal kernel and add defence-in-depth:
+
+| Module | What it does | Level |
+|--------|-------------|-------|
+| `gradient_tracker.py` | Estimates which variables are near invariant boundaries (finite-difference Jacobian) | Heuristic |
+| `active_hjb_barrier.py` | k-step lookahead: detects multi-step traps before they close | Heuristic |
+| `reference_monitor.py` | Information flow control (IFC), control barrier functions (CBF), QP action repair | Deterministic |
+| `operadic_composition.py` | Compositional verification: Verified(A) ∧ Verified(B) ⟹ Verified(A∘B) | Conditional |
+| `inverse_algebra.py` | Exact rollback via algebraic inverse effects (T7 realization) | Proven |
+
+### Information Flow Control
+
+```python
+from constrai import DataLabel, SecurityLevel, ReferenceMonitor
+
+label = DataLabel("user_pii", SecurityLevel.PII)
+monitor = ReferenceMonitor(ifc_enabled=True)
+monitor.add_label("email_field", label)
+# Actions that would write PII to a lower-security sink are blocked.
+```
+
+### Compositional Task Verification
+
+```python
+from constrai import SuperTask, TaskComposer, CompositionType
+
+composer = TaskComposer()
+composer.register_task(verified_fetch_task)
+composer.register_task(verified_process_task)
+
+# Conditionally verified: no re-verification needed when interfaces match.
+composed = composer.compose_chain(["fetch", "process"], CompositionType.SEQUENTIAL)
+```
+
+---
+
+## Invariant design
+
+T3 (Invariant Preservation) is only as useful as the invariants you write. The kernel enforces whatever you declare.
+
+**Good invariants:**
+
+```python
+# Binary, decidable, no side effects
+Invariant(
+    "budget_positive",
+    lambda s: s.get("account_balance", 0) >= 0,
+    enforcement="blocking",
+)
+
+Invariant(
+    "instance_limit",
+    lambda s: len(s.get("active_instances", [])) <= 10,
+    enforcement="blocking",
+)
+```
+
+**Monitoring-mode invariants** log violations without blocking — useful for soft warnings:
+
+```python
+Invariant(
+    "high_latency_warning",
+    lambda s: s.get("avg_latency_ms", 0) < 500,
+    enforcement="monitoring",   # Logged but never blocks
+)
+```
+
+**Avoid** blocking I/O, non-determinism, or slow computations inside invariant predicates.
+
+---
+
+## Guarantee taxonomy
+
+Every claim in ConstrAI is tagged with its epistemic status:
+
+| Level | Meaning |
+|-------|---------|
+| `PROVEN` | Holds unconditionally by construction (induction + code inspection) |
+| `CONDITIONAL` | Proven under stated assumptions |
+| `EMPIRICAL` | Measured with confidence intervals on test suites |
+| `HEURISTIC` | Best-effort; no formal guarantee |
+
+This taxonomy is consistent across code comments, docs, and test output.
+
+---
 
 ## Known limitations
 
-- **Spec-reality gap**: If your ActionSpec effects are wrong, the kernel protects the model, not the system. Environment reconciliation helps for probed variables. Unprobed variables can drift.
-- **LLM quality**: ConstrAI limits damage from bad decisions, it doesn't make the LLM smarter. Wrong action sequences waste budget without safety violations.
-- **Single-agent**: No multi-agent coordination. Concurrent access within one process is lock-protected.
-- **State scale**: Dictionary-based. Works for hundreds of variables. Millions would need sharding.
-- **Post-facto reconciliation**: Environment drift is detected *after* one bad action executes. Inherent to any system that interacts with the real world.
+| Issue | Status |
+|-------|--------|
+| Spec-reality gap: proofs hold on the model, not the world | Partially mitigated by `EnvironmentReconciler` |
+| Multi-agent coordination across processes | Not implemented |
+| Subjective goals ("write good code") | No formal predicate possible; use `MultiDimensionalAttestor` |
+| LLM adversarial prompting | Kernel limits damage to budget waste; no safety violations possible |
+| Deep Python memory manipulation (`ctypes`, `gc`) | Partially mitigated; not memory-safe |
+
+See [docs/VULNERABILITIES.md](docs/VULNERABILITIES.md) for the full breakdown.
+
+---
+
+## Running tests
+
+```bash
+pip install constrai[dev]
+pytest tests/ -v
+```
+
+Key test categories:
+
+```bash
+pytest tests/test_constrai.py         # T1–T8 unit tests
+pytest tests/test_monte_carlo.py      # 1,000 random tasks, all theorems verified
+pytest tests/chaos_fuzzer.py          # 45 adversarial attack scenarios
+pytest tests/test_composition.py      # Operadic task composition
+```
+
+---
 
 ## Project structure
 
 ```
-ConstrAI/
-├── constrai/
-│   ├── __init__.py          Public API
-│   ├── formal.py            Safety kernel, state, effects, theorems T1–T7
-│   ├── reasoning.py         Bayesian beliefs, causal graph, LLM interface
-│   ├── orchestrator.py      Main execution loop
-│   └── hardening.py         Attestors, temporal deps, reconciliation, priors
-├── tests/
-│   ├── test_constrai.py      Core theorem + integration tests
-│   ├── test_v2_hardening.py Vulnerability fix tests
-│   ├── test_monte_carlo.py  Statistical validation
-│   └── chaos_fuzzer.py      Adversarial attack suite
-├── examples/
-│   └── claude_integration.py  Anthropic Claude adapter
-├── docs/
-│   ├── ARCHITECTURE.md      How the system works
-│   ├── THEOREMS.md          Formal proofs
-│   ├── VULNERABILITIES.md   Known flaws and mitigations
-│   └── API.md               Class and method reference
-├── CONTRIBUTING.md
-├── setup.py
-└── README.md
+constrai/
+├── formal.py               # Layer 0: proven safety kernel (T1–T8)
+├── reasoning.py            # Layer 1: Bayesian beliefs, action valuation, LLM interface
+├── orchestrator.py         # Layer 2: main execution loop
+├── hardening.py            # Layer 3: environment reconciliation, sandboxing
+├── reference_monitor.py    # Enforcement: IFC, CBF, QP action repair
+├── inverse_algebra.py      # T7: algebraic inverse effects for exact rollback
+├── active_hjb_barrier.py   # Heuristic: k-step lookahead basin avoidance
+├── gradient_tracker.py     # Heuristic: finite-difference boundary proximity
+├── jacobian_fusion.py      # Heuristic: boundary sensitivity scoring for prompts
+├── safe_hover.py           # Hard enforcement gate / emergency stop
+├── operadic_composition.py # Compositional verification (OC-1, OC-2)
+├── saliency.py             # Prompt saliency engine
+├── verification_log.py     # Proof record writer
+└── __init__.py             # Public API
+docs/
+├── ARCHITECTURE.md         # Design rationale and layer descriptions
+├── THEOREMS.md             # All 13 formal claims with proofs
+├── VULNERABILITIES.md      # Known issues, fixes, residual risks
+└── API.md                  # Complete API reference
+tests/
+├── test_constrai.py        # Theorem unit tests
+├── test_monte_carlo.py     # 1,000-run probabilistic validation
+├── chaos_fuzzer.py         # 45 adversarial attack scenarios
+├── test_soft_gaps_fixed.py # Inverse algebra, QP repair, monitor integration
+├── test_boundary_enforcement.py
+├── test_composition.py
+└── test_integration.py
+safety_evaluation/          # Adversarial evaluation against 39 attack vectors
 ```
 
-## Install
-
-```bash
-pip install -e .                     # Core (zero dependencies)
-pip install -e ".[anthropic]"        # With Claude support
-```
-
-## Docs
-
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) — How the layers work together
-- [THEOREMS.md](docs/THEOREMS.md) — Formal proofs for T1–T7
-- [VULNERABILITIES.md](docs/VULNERABILITIES.md) — Known flaws, mitigations, honest limitations
-- [API.md](docs/API.md) — Class reference
-- [CONTRIBUTING.md](CONTRIBUTING.md) — How to contribute
-
-## License
-
-MIT
+---
 
 ## Citation
 
@@ -480,9 +383,14 @@ To cite ConstrAI in your work:
     author = {Ambar},
     year = {2026},
     howpublished = {\url{[https://github.com/Ambar-13/ConstrAI](https://github.com/Ambar-13/ConstrAI)}},
-    note = {Version 0.2.0}
+    note = {Version 0.3.0}
 }
 ```
 
 **Contact:** Ambar (ambar13@u.nus.edu)
 Affiliation: National University of Singapore (NUS)
+---
+
+## License
+
+MIT. See `LICENSE`.

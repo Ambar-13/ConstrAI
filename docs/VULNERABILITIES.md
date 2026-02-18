@@ -1,139 +1,109 @@
-# Known Vulnerabilities
+# Known Limitations
 
-This document lists every known vulnerability in ConstrAI, whether it's been mitigated, and what the residual risk is. No sugarcoating.
+Honest accounting of what ConstrAI can and cannot guarantee. No sugarcoating.
 
-## Fixed Vulnerabilities
+---
 
-### 1. Command Injection via SubprocessAttestor
+## V1 — Spec-Reality Gap  `Partially mitigated`
 
-**Status**: Fixed in v2.
+**The problem:** Formal proofs hold over the *model* (your `ActionSpec.effects`), not over reality. If your action spec says `Effect("files_uploaded", "set", True)` but the upload silently fails in production, the model stays clean while reality diverges.
 
-**What was wrong**: The original SubprocessAttestor could theoretically execute arbitrary commands if an agent influenced the command arguments.
+**Why this is hard:** There's no way to formally verify arbitrary real-world effects from within Python.
 
-**What we did**:
-- Commands are frozen tuples set at `__init__`. Immutable after creation.
-- `shell=False` always. Shell metacharacters (`;`, `|`, `&&`, backticks) are treated as literal strings, not shell operators.
-- Binary allowlist: only known-safe commands (`ls`, `cat`, `grep`, `curl`, `npm`, `pytest`, etc.) are permitted. `rm`, `bash`, `sh`, `eval` are blocked.
-- Environment sanitized: only `PATH`, `HOME`, `LANG` propagated.
-- Output truncated to 8KB to prevent memory exhaustion.
+**Mitigation:** `EnvironmentReconciler` (hardening.py) compares model state to live environment probes after each action. If they diverge beyond a threshold, execution halts with `EnvironmentDriftError`.
 
-**Residual risk**: If an allowed command itself has a vulnerability (e.g., a `curl` URL that triggers a server-side exploit), ConstrAI doesn't prevent that. We control what binary runs, not what the binary does internally.
+**Residual risk:** Only explicitly registered probes are checked. Unchecked variables can drift undetected.
 
-**Test coverage**: Chaos fuzzer F6, v2 tests V1.1–V1.8.
+---
 
-### 2. Temporal Blindness (Readiness Race Conditions)
+## V2 — LLM Decision Quality  `Not mitigated`
 
-**Status**: Fixed in v2.
+**The problem:** ConstrAI limits the *damage* from bad LLM decisions but doesn't make the LLM smarter. An LLM can choose legal sequences of actions that waste the entire budget without achieving the goal.
 
-**What was wrong**: The causal graph was binary — dependencies were either "met" or "not met". A database could "exist" (provisioned) but not be "ready" (accepting connections). The kernel would approve deployment the instant provisioning completed, causing the app to crash on connection timeout.
+**Why this is hard:** Solving arbitrary planning problems is PSPACE-hard. We can constrain the action space but not reason about the optimality of the chosen sequence.
 
-**What we did**:
-- `TemporalDependency` adds `min_delay_s` (minimum wait after completion) and `ReadinessProbe` (poll until truly ready).
-- `ReadinessProbe` uses exponential backoff with bounded max retries. Won't spin forever.
-- `TemporalCausalGraph` wraps the base graph. No temporal deps = standard behavior (backward compatible).
+**Mitigation:** Action value computation and Bayesian beliefs inform LLM decisions. Stuck detection triggers termination if progress stalls.
 
-**Residual risk**: Probes must check the right thing. If your probe checks `HTTP 200` but the real requirement is "database migrations complete," you still have a gap. Probes are operator-defined, so this is a configuration problem, not a framework bug.
+**Residual risk:** A sufficiently bad LLM will waste budget on legal-but-useless actions. No safety violation, but no goal achievement either.
 
-**Test coverage**: v2 tests V2.1–V2.8.
+---
 
-### 3. Bayesian Cold-Start (First-Strike Budget Waste)
+## V3 — Multi-Agent Coordination  `Not implemented`
 
-**Status**: Fixed in v2.
+**The problem:** ConstrAI is single-agent. If multiple agents share state (e.g., multiple processes modifying the same database), ConstrAI's formal guarantees apply to one agent's model, not to the global system.
 
-**What was wrong**: Bayesian beliefs started at Beta(1,1) = uniform prior. An expensive action ($50 on a $100 budget) had a 50% chance of being the first action tried, even with zero evidence it would work.
+**Residual risk:** Cross-agent state conflicts, double-spends, and invariant violations not visible to any single agent's model.
 
-**What we did**:
-- `CostAwarePriorFactory` sets priors proportional to risk:
-  - Cheap + reversible: Beta(3, 1), mean 0.75. Try freely.
-  - Moderate cost: Beta(2, 1+K·c/B·0.5). Mildly pessimistic.
-  - Expensive: Beta(1, 1+K·c/B). Strongly pessimistic.
-  - Irreversible + critical: Beta(0.01, 100), mean ≈ 0. Blocked until explicitly authorized via `factory.authorize(action_id)`.
-- This is exact Bayesian math. The prior *is* the safety mechanism. First-strike selection probability drops 42–66% for expensive actions (K=5–10).
+---
 
-**Residual risk**: The system still needs to try actions to learn. Cost-aware priors reduce the cost of learning, but don't eliminate it. If you truly cannot afford a single failure on any action, Bayesian learning is fundamentally the wrong tool — you need pre-verified action specs.
+## V4 — Subjective Goals  `Partially mitigated`
 
-**Test coverage**: v2 tests V3.1–V3.8.
+**The problem:** T3 (invariant preservation) requires binary predicates. Goals like "write good code" or "produce a high-quality report" cannot be precisely formalized.
 
-### 4. Spec-Reality Gap (Model Drift)
+**Mitigation:** `MultiDimensionalAttestor` scores quality across multiple dimensions (existence, completeness, correctness, quality, safety, regression). Any zero dimension fails the attestation. This is harder to game than a single score.
 
-**Status**: Partially fixed in v2.
+**Residual risk:** The attestation dimensions themselves require human judgment to define well.
 
-**What was wrong**: The formal proofs (T1–T7) protect the *internal model*. If an ActionSpec says "create a file" but the real operation also deletes a backup, the model stays clean while reality drifts into a bad state.
+---
 
-**What we did**:
-- `EnvironmentReconciler` compares model state to environment probes after every action.
-- If `model.file_count = 5` but `len(os.listdir(dir)) = 3`, it raises `EnvironmentDriftError` and halts.
-- Configurable drift threshold and halt-on-drift behavior.
+## V5 — Evasion via Dynamic Dispatch  `Partially mitigated`
 
-**Residual risk**: You can only detect drift on variables you probe. Unprobed variables are invisible. If the ActionSpec has a side effect you didn't anticipate and didn't write a probe for, it goes undetected.
+**The problem:** Invariant predicates that use static pattern matching (e.g., checking if a command string contains "rm -rf") can be bypassed via string concatenation, base64 encoding, or `getattr` dynamic dispatch.
 
-This is the fundamental limitation of the approach: **the map is not the territory**. Environment reconciliation is how we check the territory, but we can only check what we look at.
+**Evaluation result:** 4 of 39 adversarial attacks succeeded in the safety evaluation. All 4 exploited pattern matching in *user-written invariant predicates*, not the formal kernel. The kernel has no known bypasses when invariants are correctly written.
 
-**Test coverage**: v2 tests V4.1–V4.7.
+**Mitigation:** The kernel's formal invariant checking is immune when invariants are written against *state values* (e.g., `s.get("command")` after normalization) rather than raw string matching.
 
-### 5. Reward Hacking (Proxy Metric Gaming)
+**Residual risk:** The quality of invariants determines the quality of safety. Writing invariants that are evasion-resistant is a user responsibility.
 
-**Status**: Mitigated, not eliminated.
+---
 
-**What was wrong**: Single-metric attestors are trivially gameable. Goal is "create 5 files"? Agent creates 5 empty files. Goal is "100% test coverage"? Agent deletes complex code paths.
+## V6 — Deep Python Memory Manipulation  `Partially mitigated`
 
-**What we did**:
-- `MultiDimensionalAttestor` checks multiple quality dimensions: existence, completeness, correctness, quality, safety, regression.
-- Any dimension scoring zero fails the entire attestation, even if others are perfect.
-- Example: 5 empty files → existence=1.0, quality=0.0 → FAILED.
+**The problem:** Python is not memory-safe. An adversary with process access can use `ctypes`, `gc`, or `sys` internals to mutate objects that Python treats as immutable.
 
-**Residual risk**: This is defense-in-depth, not a proof. A sufficiently clever agent could satisfy all dimensions with low-quality outputs that technically pass each check. More dimensions make this harder, but not provably impossible. We're honest about this — the guarantee is EMPIRICAL, not PROVEN.
+**Mitigation:** `State` uses `MappingProxyType` (read-only at the C level via Python's normal API). `TraceEntry` is a frozen dataclass. Both resist normal and moderate-effort mutation.
 
-The real defense against reward hacking is writing better attestors. ConstrAI gives you the framework; you supply the domain-specific quality checks.
+**Residual risk:** A sufficiently determined adversary with process-level access can bypass these protections. ConstrAI is not a sandboxing mechanism — it assumes the Python runtime is trusted.
 
-**Test coverage**: v2 tests V5.1–V5.4.
+---
 
-## Unfixed Vulnerabilities (Open Problems)
+## V7 — LLM Adversarial Prompting  `Accepted`
 
-### 6. Semantic Drift on Subjective Goals
+**The problem:** A crafted task goal or state description could cause the LLM to choose bad *sequences* of legal actions that drain the budget without achieving anything useful.
 
-**Status**: Not fixed. No clear fix exists.
+**Why this is accepted:** The formal layer prevents any individual action from violating invariants, exceeding budget, or corrupting the trace. The LLM can waste budget but cannot cause safety violations. Preventing all adversarial LLM behavior is an open research problem.
 
-**The problem**: If the goal is "write good code" or "optimize performance," what does "good" mean? Formal verification needs binary predicates. Subjective quality is inherently non-binary.
+---
 
-**Our honest position**: ConstrAI works best with goals that have clear, measurable success criteria. For subjective goals, the multi-dimensional attestor helps, but the quality checks are only as good as the human who writes them.
+## V8 — T2 Termination Conditional  `Accepted`
 
-### 7. Multi-Agent Coordination
+**The problem:** T2 (termination) requires `min_action_cost > 0`. The `SafetyKernel` constructor enforces this. If the kernel is instantiated with `min_action_cost = 0`, the termination bound is undefined (infinite loop is possible).
 
-**Status**: Not implemented.
+**Mitigation:** The constructor raises `ValueError` if `min_action_cost ≤ 0`.
 
-**The problem**: ConstrAI controls one agent in one execution loop. If you run multiple ConstrAI agents that share resources, they can interfere with each other. No distributed locking, no consensus protocol.
+**Residual risk:** Code that bypasses the constructor (e.g., directly setting the attribute) removes the guarantee.
 
-### 8. LLM Adversarial Prompting
+---
 
-**Status**: Structurally mitigated, not eliminated.
+## V9 — No Global Termination for Monitoring Invariants  `Accepted by design`
 
-**The problem**: A crafted system state or goal description could theoretically trick the LLM into making bad decisions within the legal action space.
+**The problem:** Monitoring-mode invariants can be violated indefinitely. The system keeps running even if a monitoring invariant fires every step.
 
-**What helps**: The safety kernel limits the damage. Even if the LLM is tricked, it can only select from defined actions, and those actions pass through invariant checking. The worst case is wasted budget, not safety violations.
+**Why this is accepted by design:** Monitoring-mode invariants are explicitly not safety-critical. They exist for diagnostics. If you want a hard stop, use `enforcement="blocking"`.
 
-**What doesn't help**: If all available actions are safe but the LLM picks the wrong *sequence*, the goal fails without any safety violation. Budget waste is the residual risk.
+---
 
-### 9. Deep State Mutation
+## Summary
 
-**Status**: Partially mitigated.
-
-**The problem**: State values that are deeply nested mutable objects (list of lists, dict of dicts) could theoretically be mutated through references.
-
-**What we did**: `State.__init__` deep-copies inputs. `State.get()` deep-copies outputs. `_vars` uses `MappingProxyType`. This handles all normal usage patterns.
-
-**Residual risk**: Python is not memory-safe. If you try hard enough (ctypes, gc manipulation), you can mutate anything. ConstrAI protects against accidental and normal-effort intentional mutation, not against a determined attacker with full access to the Python runtime.
-
-## Vulnerability Classification Summary
-
-| ID | Vulnerability | Status | Guarantee Level |
-|----|--------------|--------|----------------|
-| 1 | Command Injection | **Fixed** | PROVEN |
-| 2 | Temporal Blindness | **Fixed** | CONDITIONAL |
-| 3 | Bayesian Cold-Start | **Fixed** | PROVEN |
-| 4 | Spec-Reality Gap | **Partial** | CONDITIONAL |
-| 5 | Reward Hacking | **Mitigated** | EMPIRICAL |
-| 6 | Semantic Drift | Open | — |
-| 7 | Multi-Agent | Open | — |
-| 8 | LLM Adversarial | Structural | — |
-| 9 | Deep State Mutation | Partial | — |
+| ID | Description | Status |
+|----|-------------|--------|
+| V1 | Spec-reality gap | Partially mitigated by EnvironmentReconciler |
+| V2 | LLM decision quality | Not mitigated; formal layer limits damage |
+| V3 | Multi-agent coordination | Not implemented |
+| V4 | Subjective goals | Partially mitigated by MultiDimensionalAttestor |
+| V5 | Evasion via dynamic dispatch | Mitigated when invariants check state values, not strings |
+| V6 | Deep memory manipulation | Mitigated for normal API; not for ctypes/gc |
+| V7 | LLM adversarial prompting | Accepted; formal layer prevents safety violations |
+| V8 | T2 conditional on min_cost > 0 | Accepted; constructor enforces this |
+| V9 | Monitoring invariants never halt | Accepted by design |

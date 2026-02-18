@@ -1,6 +1,25 @@
 """
+
+Estimates how close each state variable is to violating each invariant,
+using finite-difference perturbation (a "Jacobian of Safety" approximation).
+
+GUARANTEE LEVEL: HEURISTIC
+  Results are NOT formally proven. Use this for:
+    - Informing LLM prompts (highlight near-boundary variables)
+    - Early warnings before invariant violations occur
+    - Prompt saliency pruning (drop irrelevant variables from context)
+
+  For formally-proven invariant enforcement, use the kernel's T3 (formal.py).
+
+Core idea: for each (variable, invariant) pair, perturb the variable by a
+small ε and check whether the invariant still holds. A small perturbation
+that breaks the invariant means the variable is near its safety boundary.
+
+Reliability assumptions:
+  - Invariant predicates are pure (no side effects, no randomness)
+  - Invariants are approximately continuous near current state
+  - The chosen ε is proportional to real dynamics
 Gradient Tracker for Formal Safety Margins (Heuristic)
-=======================================================
 
 This module implements HEURISTIC "Jacobian of Safety" — estimation of
 how close each state variable is to violating an invariant.
@@ -84,28 +103,26 @@ class GradientReport:
 
 class GradientTracker:
     """
-    Compute formal safety margins (gradients) for each state variable
-    with respect to each invariant.
+    Heuristic safety margin estimator. Reports how close each state variable
+    is to breaking each invariant, using finite-difference perturbation.
     """
-    
+
     def __init__(self, invariants: List[Invariant]):
         self.invariants = invariants
-    
+
     def compute_gradients(self, state: State) -> GradientReport:
         """
-        Analyze how close state variables are to violating invariants.
-        
+        Estimate boundary proximity for all (variable, invariant) pairs.
+
         Algorithm:
           For each variable k in state:
             For each invariant I:
-              1. Check if I holds on state → baseline
-              2. Perturb k (increment/decrement by small ε)
-              3. Check if I still holds on perturbed state
-              4. Assign sensitivity score
-        
-        Theorem: This is a LOCAL linear approximation of the constraint
-        boundary. It's exact only for linear constraints, but works as a
-        heuristic for nonlinear ones.
+              1. Verify I holds on current state (baseline).
+              2. If k is numeric, perturb by ε and 10ε in both directions.
+              3. If a small perturbation breaks I, score the variable high-risk.
+
+        This is a LOCAL finite-difference approximation. Exact only for linear
+        constraints; used as a diagnostic heuristic for nonlinear ones.
         """
         report = GradientReport(state_fingerprint=state.fingerprint)
         epsilon = 0.01  # Small perturbation for finite difference
@@ -195,10 +212,8 @@ class GradientTracker:
     
     def should_trigger_safe_hover(self, report: GradientReport) -> Tuple[bool, str]:
         """
-        Decide if we should enter Safe Hover mode based on gradient report.
-        
-        Heuristic: If ANY critical variable is detected, or overall margin < 10%,
-        enter safe hover.
+        Heuristic: recommend Safe Hover if any variable is CRITICAL/SEVERE,
+        or if the overall minimum safety margin drops below 10%.
         """
         if report.critical_variables:
             return True, f"Critical variables: {report.critical_variables}"
