@@ -383,7 +383,7 @@ To cite ConstrAI in your work:
     author = {Ambar},
     year = {2026},
     howpublished = {\url{[https://github.com/Ambar-13/ConstrAI](https://github.com/Ambar-13/ConstrAI)}},
-    note = {Version 0.2.0}
+    note = {Version 0.3.0}
 }
 ```
 
