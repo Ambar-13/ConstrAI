@@ -1,0 +1,49 @@
+# Publishes to PyPI via OIDC Trusted Publisher -- no long-lived tokens stored.
+# Triggered by pushing a version tag (e.g. git tag v0.4.0 && git push --tags).
+# The test workflow must pass before publishing begins.
+
+name: Publish to PyPI
+
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  # ---- 1. run the full test matrix first ----------------------------------
+  test:
+    uses: ./.github/workflows/test.yml
+
+  # ---- 2. build & publish only when tests are green ----------------------
+  publish:
+    name: Build and publish to PyPI
+    needs: test
+    runs-on: ubuntu-latest
+    environment: pypi
+
+    permissions:
+      id-token: write  # Required for OIDC Trusted Publisher
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - name: Install build tools
+        run: pip install build twine
+
+      - name: Build sdist and wheel
+        run: python -m build
+
+      - name: Check distribution artefacts
+        run: twine check dist/*
+
+      - name: Publish to PyPI
+        uses: pypa/gh-action-pypi-publish@release/v1
+        # No username/password/token needed -- authentication is handled
+        # automatically by the OIDC Trusted Publisher configured on PyPI.

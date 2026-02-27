@@ -1,0 +1,89 @@
+# Integration tests for ConstrAI components and LLM adapters.
+#
+# Runs:
+#   - On push/PR touching adapter code or integration tests
+#   - Weekly on Sunday at 03:00 UTC
+#   - Manually (workflow_dispatch)
+
+name: Integration Tests
+
+on:
+  workflow_dispatch:
+
+  push:
+    paths:
+      - "constrai/adapters/**"
+      - "tests/test_integration*.py"
+      - ".github/workflows/test-integrations.yml"
+
+  pull_request:
+    paths:
+      - "constrai/adapters/**"
+      - "tests/test_integration*.py"
+
+  schedule:
+    - cron: "0 3 * * 0"   # Weekly, Sunday 03:00 UTC
+
+jobs:
+  # ── Core integration tests ─────────────────────────────────────────────────
+  test-integration:
+    name: "Integration tests / Python ${{ matrix.python-version }}"
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.9", "3.11", "3.13"]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python ${{ matrix.python-version }}
+        uses: actions/setup-python@v5
+        with:
+          python-version: "${{ matrix.python-version }}"
+          cache: pip
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Run integration tests
+        run: pytest tests/test_integration.py -v --tb=short
+
+  # ── Email safety demo smoke test ───────────────────────────────────────────
+  test-email-demo:
+    name: "Email safety demo smoke test"
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install package
+        run: pip install -e ".[dev]"
+
+      - name: Run email demo (kernel-only and persistent modes)
+        run: |
+          python -m examples.email_safety --kernel-only
+          python -m examples.email_safety --persistent
+
+  # ── Summary gate ───────────────────────────────────────────────────────────
+  integration-gate:
+    name: "Integration gate"
+    needs:
+      - test-integration
+      - test-email-demo
+    runs-on: ubuntu-latest
+    if: always()
+    steps:
+      - name: Check all integration jobs passed
+        run: |
+          if [[ "${{ contains(needs.*.result, 'failure') }}" == "true" ]]; then
+            echo "One or more integration jobs failed."
+            exit 1
+          fi
+          echo "All integration jobs passed."
