@@ -7,6 +7,8 @@
 
 Formal safety for AI agents — enforced at execution, not in the prompt.
 
+**ClampAI** is a Python safety framework for LLM agents and AI automation — budget enforcement, safety guardrails, invariant checking, and rate limiting at the execution layer. Works with LangChain, LangGraph, OpenAI, Anthropic, OpenClaw, AutoGen, CrewAI, and FastAPI. Zero runtime dependencies.
+
 ---
 
 ## Install
@@ -1263,7 +1265,7 @@ SECURITY.md
     author = {Ambar},
     year   = {2026},
     url    = {https://github.com/Ambar-13/ClampAI},
-    note   = {Version 1.0.0}
+    note   = {Version 1.0.1}
 }
 ```
 

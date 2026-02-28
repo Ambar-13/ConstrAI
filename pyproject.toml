@@ -4,7 +4,7 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "clampai"
-version = "1.0.0"
+version = "1.0.1"
 description = "Safety guardrails for LLM agents — budget enforcement, invariants, and provable guarantees. Zero dependencies."
 readme = "README.md"
 license = "MIT"
@@ -13,29 +13,46 @@ authors = [
 ]
 keywords = [
     "clampai",
-    "llm",
-    "llm-safety",
-    "ai-safety",
+    "llm safety",
+    "llm guardrails",
+    "llm agent",
+    "llm security",
+    "llm budget",
+    "llm cost control",
+    "llm rate limiting",
+    "ai safety",
+    "ai agent",
+    "ai agent safety",
+    "ai automation",
+    "ai automation safety",
+    "agent safety",
+    "agent budget",
+    "agent guardrails",
+    "budget enforcement",
+    "cost enforcement",
+    "budget control",
+    "safety invariants",
     "guardrails",
-    "budget-enforcement",
-    "agent",
-    "agent-framework",
-    "agent-safety-frameworks",
-    "autonomous-agents",
-    "agentic-ai",
-    "agentic-ai-security",
+    "python guardrails",
+    "autonomous agents",
+    "agentic ai",
+    "agentic ai security",
+    "python safety framework",
+    "action budget",
+    "rate limiting",
+    "openai safety",
+    "openai guardrails",
+    "langchain safety",
+    "langchain guardrails",
     "langchain",
     "langgraph",
-    "openai",
-    "anthropic",
-    "openclaw",
     "fastapi",
-    "rate-limiting",
-    "invariants",
-    "middleware",
     "autogen",
     "crewai",
-    "formal-methods",
+    "openclaw",
+    "openai",
+    "anthropic",
+    "formal methods",
     "verification",
 ]
 classifiers = [

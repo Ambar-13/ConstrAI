@@ -47,7 +47,7 @@ def build_app() -> Any:
             "Install it with: pip install clampai[fastapi]"
         )
 
-    app = FastAPI(title="ClampAI FastAPI Example", version="1.0.0")
+    app = FastAPI(title="ClampAI FastAPI Example", version="1.0.1")
 
     # Add ClampAI middleware: 50 budget units shared across all requests.
     # /admin and /internal paths are blocked by invariant.

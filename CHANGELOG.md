@@ -21,6 +21,19 @@ ClampAI is in the **0.x** phase while the API stabilises.
 
 ---
 
+## [1.0.1] — 2026-02-28
+
+### Changed
+
+- PyPI metadata: expanded keywords to multi-word search phrases for better
+  Elasticsearch ranking (`"llm safety"`, `"budget enforcement"`, `"agent guardrails"`,
+  `"langchain safety"`, `"openai guardrails"`, `"ai automation"`, and 35 more).
+- README: added keyword-rich opening paragraph for Google indexing of the PyPI page.
+- `pyproject.toml`: bumped Development Status to `5 - Production/Stable`,
+  added `Topic :: Security` classifier, `Operating System :: OS Independent`.
+
+---
+
 ## [1.0.0] — 2026-02-28
 
 API-stability milestone. The public API (`clampai/__init__.py`) is now frozen

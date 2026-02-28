@@ -6,7 +6,7 @@ authors:
   - given-names: Ambar
     affiliation: "National University of Singapore"
     orcid: ""
-version: "1.0.0"
+version: "1.0.1"
 date-released: "2026-02-28"
 license: MIT
 url: "https://github.com/Ambar-13/ClampAI"
@@ -30,6 +30,6 @@ keywords:
   - autonomous-agents
   - invariant-checking
   - llm-safety
-  - mathematical-clampaints
+  - mathematical-constraints
   - state-machines
   - execution-semantics

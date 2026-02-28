@@ -207,7 +207,7 @@ from .saliency import (
 # Test utilities
 from .testing import SafetyHarness, make_action, make_state
 
-__version__ = "1.0.0"
+__version__ = "1.0.1"
 __all__ = [
     "FORMAL_CLAIMS",
     "HARDENING_CLAIMS",
