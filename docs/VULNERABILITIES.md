@@ -1,6 +1,6 @@
 # Known Limitations
 
-Honest accounting of what ConstrAI can and cannot guarantee. No sugarcoating.
+Honest accounting of what ClampAI can and cannot guarantee. No sugarcoating.
 
 ---
 
@@ -18,9 +18,9 @@ Honest accounting of what ConstrAI can and cannot guarantee. No sugarcoating.
 
 ## V2 — LLM Decision Quality  `Not mitigated`
 
-**The problem:** ConstrAI limits the *damage* from bad LLM decisions but doesn't make the LLM smarter. An LLM can choose legal sequences of actions that waste the entire budget without achieving the goal.
+**The problem:** ClampAI limits the *damage* from bad LLM decisions but doesn't make the LLM smarter. An LLM can choose legal sequences of actions that waste the entire budget without achieving the goal.
 
-**Why this is hard:** Solving arbitrary planning problems is PSPACE-hard. We can constrain the action space but not reason about the optimality of the chosen sequence.
+**Why this is hard:** Solving arbitrary planning problems is PSPACE-hard. We can clampain the action space but not reason about the optimality of the chosen sequence.
 
 **Mitigation:** Action value computation and Bayesian beliefs inform LLM decisions. Stuck detection triggers termination if progress stalls.
 
@@ -30,7 +30,7 @@ Honest accounting of what ConstrAI can and cannot guarantee. No sugarcoating.
 
 ## V3 — Multi-Agent Coordination  `Not implemented`
 
-**The problem:** ConstrAI is single-agent. If multiple agents share state (e.g., multiple processes modifying the same database), ConstrAI's formal guarantees apply to one agent's model, not to the global system.
+**The problem:** ClampAI is single-agent. If multiple agents share state (e.g., multiple processes modifying the same database), ClampAI's formal guarantees apply to one agent's model, not to the global system.
 
 **Residual risk:** Cross-agent state conflicts, double-spends, and invariant violations not visible to any single agent's model.
 
@@ -64,7 +64,7 @@ Honest accounting of what ConstrAI can and cannot guarantee. No sugarcoating.
 
 **Mitigation:** `State` uses `MappingProxyType` (read-only at the C level via Python's normal API). `TraceEntry` is a frozen dataclass. Both resist normal and moderate-effort mutation.
 
-**Residual risk:** A sufficiently determined adversary with process-level access can bypass these protections. ConstrAI is not a sandboxing mechanism — it assumes the Python runtime is trusted.
+**Residual risk:** A sufficiently determined adversary with process-level access can bypass these protections. ClampAI is not a sandboxing mechanism — it assumes the Python runtime is trusted.
 
 ---
 

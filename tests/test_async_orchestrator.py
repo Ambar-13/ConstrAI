@@ -25,7 +25,7 @@ from unittest.mock import AsyncMock, patch
 
 import pytest
 
-from constrai import (
+from clampai import (
     AsyncOrchestrator,
     AsyncSafetyKernel,
     Effect,
@@ -34,9 +34,9 @@ from constrai import (
     TaskDefinition,
     TerminationReason,
 )
-from constrai.formal import ActionSpec
-from constrai.orchestrator import ExecutionResult
-from constrai.reasoning import MockLLMAdapter
+from clampai.formal import ActionSpec
+from clampai.orchestrator import ExecutionResult
+from clampai.reasoning import MockLLMAdapter
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
 
@@ -587,7 +587,7 @@ class TestExecutionResultShape:
         s = result.summary()
         assert isinstance(s, str)
         assert len(s) > 10
-        assert "ConstrAI" in s
+        assert "ClampAI" in s
 
     def test_goal_achieved_flag_true_only_on_goal_achieved(self):
         achieved = asyncio.run(AsyncOrchestrator(_simple_task(goal_count=2)).run())

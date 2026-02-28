@@ -16,7 +16,7 @@ Only the latest minor release receives security patches during the 0.x phase.
 **Do not open a public GitHub issue for security vulnerabilities.**
 
 Report vulnerabilities privately using
-[GitHub Security Advisories](https://github.com/Ambar-13/ConstrAI/security/advisories/new).
+[GitHub Security Advisories](https://github.com/Ambar-13/ClampAI/security/advisories/new).
 This keeps details confidential until a fix is available and coordinated disclosure
 has been agreed upon.
 
@@ -24,7 +24,7 @@ Please include:
 
 - A clear description of the vulnerability and its impact.
 - Step-by-step reproduction instructions (minimal reproducer preferred).
-- The ConstrAI version(s) affected.
+- The ClampAI version(s) affected.
 - Whether you believe a CVE should be requested.
 
 If you need to contact the maintainer directly before using the advisory form,
@@ -84,7 +84,7 @@ that are not realistic attack vectors.
 | Theoretical SHA-256 weaknesses | Not a realistic attack vector; no fix possible at the library level |
 | Bugs in third-party dependencies (anthropic, openai, langchain) | Report directly to those projects |
 | User-written invariant predicate bugs | The kernel enforces what you declare; incorrect predicates are user error |
-| Slow invariant predicates (performance degradation) | Not a safety bypass; use `Invariant(..., max_eval_ms=N)` to set a timeout — slow predicates are treated as violations, not exploitable gaps. See `constrai/formal.py:Invariant._check_with_timeout`. |
+| Slow invariant predicates (performance degradation) | Not a safety bypass; use `Invariant(..., max_eval_ms=N)` to set a timeout — slow predicates are treated as violations, not exploitable gaps. See `clampai/formal.py:Invariant._check_with_timeout`. |
 | Vulnerabilities requiring `ctypes`, `gc`, or other deliberate CPython internals abuse | Partially mitigated; full memory safety is outside scope (see `docs/VULNERABILITIES.md`) |
 | Issues requiring physical or OS-level access to the host | Out of threat model |
 

@@ -3,8 +3,8 @@ requires = ["setuptools>=68", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "constrai"
-version = "0.4.1"
+name = "clampai"
+version = "1.0.0"
 description = "Formal safety framework for AI agents with provable guarantees"
 readme = "README.md"
 license = "MIT"
@@ -45,6 +45,8 @@ anthropic  = ["anthropic>=0.20.0"]
 openai     = ["openai>=1.0.0"]
 openclaw   = []  # Requires: npm install -g openclaw@latest (no Python package)
 langchain     = ["langchain>=0.2.0", "langchain-core>=0.3.0", "pydantic>=2.0"]
+langgraph     = ["langgraph>=0.2"]
+fastapi       = ["fastapi>=0.100.0", "starlette>=0.27.0"]
 mcp           = ["mcp>=1.0.0"]
 prometheus    = ["prometheus-client>=0.17.0"]
 opentelemetry = ["opentelemetry-api>=1.0.0"]
@@ -59,19 +61,19 @@ dev = [
 ]
 
 [project.urls]
-Homepage        = "https://github.com/Ambar-13/ConstrAI"
-Repository      = "https://github.com/Ambar-13/ConstrAI"
-"Bug Tracker"   = "https://github.com/Ambar-13/ConstrAI/issues"
-Documentation   = "https://github.com/Ambar-13/ConstrAI/tree/main/docs"
-Changelog       = "https://github.com/Ambar-13/ConstrAI/blob/main/CHANGELOG.md"
-"Security Policy" = "https://github.com/Ambar-13/ConstrAI/blob/main/SECURITY.md"
+Homepage        = "https://github.com/Ambar-13/ClampAI"
+Repository      = "https://github.com/Ambar-13/ClampAI"
+"Bug Tracker"   = "https://github.com/Ambar-13/ClampAI/issues"
+Documentation   = "https://github.com/Ambar-13/ClampAI/tree/main/docs"
+Changelog       = "https://github.com/Ambar-13/ClampAI/blob/main/CHANGELOG.md"
+"Security Policy" = "https://github.com/Ambar-13/ClampAI/blob/main/SECURITY.md"
 
 [tool.setuptools.packages.find]
 where   = ["."]
-include = ["constrai*"]
+include = ["clampai*"]
 
 [tool.setuptools.package-data]
-constrai = ["py.typed"]
+clampai = ["py.typed"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -98,13 +100,13 @@ ignore = [
 ]
 
 [tool.ruff.lint.per-file-ignores]
-"constrai/__init__.py"          = ["F401"]
-"constrai/adapters/__init__.py" = ["F401"]
+"clampai/__init__.py"          = ["F401"]
+"clampai/adapters/__init__.py" = ["F401"]
 "tests/*.py"    = ["F401", "F811"]
 "examples/*.py" = ["F401"]
 
 [tool.ruff.lint.isort]
-known-first-party = ["constrai"]
+known-first-party = ["clampai"]
 
 [tool.mypy]
 python_version         = "3.9"
@@ -120,16 +122,22 @@ warn_unused_ignores    = true
 # These modules predate the strict-typing migration and are fully tested.
 # Annotation coverage is tracked for incremental improvement.
 module = [
-    "constrai.reasoning",
-    "constrai.reference_monitor",
-    "constrai.orchestrator",
-    "constrai.adapters.openai_adapter",
-    "constrai.adapters.anthropic_adapter",
-    "constrai.adapters.openclaw_adapter",
-    "constrai.adapters.metrics",
-    "constrai.adapters.langchain_tool",
-    "constrai.operadic_composition",
-    "constrai.jacobian_fusion",
+    "clampai.reasoning",
+    "clampai.reference_monitor",
+    "clampai.orchestrator",
+    "clampai.adapters.anthropic_adapter",
+    "clampai.adapters.fastapi_middleware",
+    "clampai.adapters.autogen_adapter",
+    "clampai.adapters.crewai_adapter",
+    "clampai.adapters.langchain_callback",
+    "clampai.adapters.langchain_tool",
+    "clampai.adapters.langgraph_adapter",
+    "clampai.adapters.metrics",
+    "clampai.adapters.openai_adapter",
+    "clampai.adapters.openclaw_adapter",
+    "clampai.operadic_composition",
+    "clampai.jacobian_fusion",
+    "clampai.server",
 ]
 ignore_errors = true
 
@@ -138,11 +146,15 @@ ignore_errors = true
 # langchain, mcp, prometheus-client, opentelemetry-api) that are not in [dev].
 # They are covered by the integration CI (test-integrations.yml), not here.
 omit = [
-    "constrai/adapters/anthropic_adapter.py",
-    "constrai/adapters/openclaw_adapter.py",
-    "constrai/adapters/openai_adapter.py",
-    "constrai/adapters/langchain_tool.py",
-    "constrai/adapters/mcp_server.py",
-    "constrai/adapters/metrics.py",
-    "constrai/adapters/__init__.py",
+    "clampai/adapters/anthropic_adapter.py",
+    "clampai/adapters/autogen_adapter.py",
+    "clampai/adapters/crewai_adapter.py",
+    "clampai/adapters/langchain_callback.py",
+    "clampai/adapters/langchain_tool.py",
+    "clampai/adapters/mcp_server.py",
+    "clampai/adapters/metrics.py",
+    "clampai/adapters/openclaw_adapter.py",
+    "clampai/adapters/openai_adapter.py",
+    "clampai/adapters/__init__.py",
+    "clampai/server.py",
 ]

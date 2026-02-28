@@ -1,5 +1,5 @@
 """
-examples/01_hello_safety.py — Your first ConstrAI safety check.
+examples/01_hello_safety.py — Your first ClampAI safety check.
 
 The simplest possible usage: create a SafetyKernel with a budget and one
 invariant, then evaluate a proposed action. The kernel either approves it
@@ -9,7 +9,7 @@ Run:
     python examples/01_hello_safety.py
 """
 
-from constrai import (
+from clampai import (
     ActionSpec,
     Effect,
     Invariant,

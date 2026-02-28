@@ -11,9 +11,9 @@ import json
 import os
 from typing import Optional
 
-from constrai import (
+from clampai import (
     ActionSpec,
-    ConstrAI_SYSTEM_PROMPT,
+    ClampAI_SYSTEM_PROMPT,
     Effect,
     Invariant,
     LLMAdapter,
@@ -22,14 +22,14 @@ from constrai import (
     TaskDefinition,
 )
 
-# Claude adapter — plugs Anthropic API into ConstrAI
+# Claude adapter — plugs Anthropic API into ClampAI
 
 class ClaudeAdapter:
     """
-    Anthropic Claude adapter for ConstrAI.
+    Anthropic Claude adapter for ClampAI.
 
     Implements the LLMAdapter protocol by delegating to the Anthropic
-    messages API. ConstrAI handles all structured parsing, validation,
+    messages API. ClampAI handles all structured parsing, validation,
     and safety checking; Claude just reasons.
     """
     def __init__(self, model: str = "claude-sonnet-4-20250514",
@@ -50,7 +50,7 @@ class ClaudeAdapter:
             model=self.model,
             max_tokens=max_tokens,
             temperature=temperature,
-            system=system_prompt or ConstrAI_SYSTEM_PROMPT,
+            system=system_prompt or ClampAI_SYSTEM_PROMPT,
             messages=[{"role": "user", "content": prompt}],
         )
         self.total_tokens += response.usage.input_tokens + response.usage.output_tokens
@@ -185,7 +185,7 @@ def build_web_app_task() -> TaskDefinition:
             "action:configure_domain:succeeds": (7.0, 3.0),   # Usually works
         },
 
-        system_prompt=ConstrAI_SYSTEM_PROMPT + """
+        system_prompt=ClampAI_SYSTEM_PROMPT + """
 DOMAIN CONTEXT:
 You are building a React web application. Follow standard practices:
 - Initialize before building components

@@ -19,7 +19,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from constrai import (
+from clampai import (
     Invariant,
     SafetyViolation,
     rate_limit_invariant,

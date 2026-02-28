@@ -1,4 +1,4 @@
-"""Tests for constrai.hardening — defence-in-depth layer.
+"""Tests for clampai.hardening — defence-in-depth layer.
 
 Covers SubprocessAttestor, PredicateAttestor, AttestationGate, ReadinessProbe,
 TemporalDependency, TemporalCausalGraph, CostAwarePriorFactory,
@@ -13,8 +13,8 @@ from unittest.mock import MagicMock, patch
 
 import pytest
 
-from constrai.formal import ActionSpec, Effect, State
-from constrai.hardening import (
+from clampai.formal import ActionSpec, Effect, State
+from clampai.hardening import (
     HARDENING_CLAIMS,
     Attestation,
     AttestationGate,
@@ -39,7 +39,7 @@ from constrai.hardening import (
     TemporalCausalGraph,
     TemporalDependency,
 )
-from constrai.reasoning import BeliefState, CausalGraph
+from clampai.reasoning import BeliefState, CausalGraph
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
 

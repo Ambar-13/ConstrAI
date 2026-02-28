@@ -9,7 +9,7 @@ This ensures safety layers work together, not against each other.
 
 from __future__ import annotations
 
-from constrai import (
+from clampai import (
     ActionSpec,
     DataLabel,
     Effect,

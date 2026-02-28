@@ -1,5 +1,5 @@
 """
-ConstrAI Test Suite — Continued
+ClampAI Test Suite — Continued
 
 S12 — State immutability.
 S13 — Monte Carlo statistical validation.
@@ -9,7 +9,7 @@ import math
 import random
 import time
 
-from constrai import (
+from clampai import (
     ActionSpec,
     Belief,
     BeliefState,

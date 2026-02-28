@@ -2,11 +2,11 @@
 examples/03_invariants.py — Invariant enforcement (Theorem T3).
 
 Invariants are formal safety predicates evaluated on the projected next state
-before any action is committed. ConstrAI ships 21 pre-built invariant factory
+before any action is committed. ClampAI ships 21 pre-built invariant factory
 functions for common patterns. This example shows:
 
   • Writing custom invariants
-  • Using factory functions from constrai.invariants
+  • Using factory functions from clampai.invariants
   • Blocking vs monitoring enforcement modes
   • Critical severity — actions that violate a critical invariant are
     rejected even if they would otherwise pass budget and other checks
@@ -15,7 +15,7 @@ Run:
     python examples/03_invariants.py
 """
 
-from constrai import (
+from clampai import (
     ActionSpec,
     Effect,
     Invariant,

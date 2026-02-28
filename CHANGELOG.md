@@ -1,6 +1,6 @@
 # Changelog
 
-All notable changes to ConstrAI are documented in this file.
+All notable changes to ClampAI are documented in this file.
 
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
@@ -9,15 +9,178 @@ Versions follow [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
 ## Versioning policy (0.x phase)
 
-ConstrAI is in the **0.x** phase while the API stabilises.
+ClampAI is in the **0.x** phase while the API stabilises.
 
 - **Patch releases** (`0.y.Z`) never break backwards compatibility.
   You can always upgrade a patch version safely.
 - **Minor releases** (`0.Y.0`) may include breaking changes.
   Read the migration notes in the relevant section before upgrading.
 - **1.0.0** is the API-stability milestone.  Once published, the public API
-  (everything in `constrai/__init__.py`) will follow full SemVer guarantees:
+  (everything in `clampai/__init__.py`) will follow full SemVer guarantees:
   no breaking changes without a major-version bump.
+
+---
+
+## [1.0.0] — 2026-02-28
+
+API-stability milestone. The public API (`clampai/__init__.py`) is now frozen
+under full SemVer: no breaking changes without a major-version bump.
+
+### Added
+
+**LangGraph adapter** (`clampai/adapters/langgraph_adapter.py`)
+
+- `SafetyNode` — a LangGraph-compatible callable that wraps any node function
+  with ClampAI budget enforcement and invariant checking.  Budget and step
+  count persist across calls; `reset()` restores the initial state.
+- `@clampai_node(budget, cost_per_step, invariants)` — decorator equivalent
+  of `SafetyNode`, preserving `__name__` and `__doc__` via `functools.update_wrapper`.
+- `budget_guard(budget, cost_per_step)` — factory that returns a pass-through
+  LangGraph node enforcing a budget cap.  Raises `ClampAIBudgetError` (HTTP
+  analogue: 429) when exhausted.
+- `invariant_guard(invariants)` — factory that returns a pass-through LangGraph
+  node checking invariants with no budget charge.  Raises
+  `ClampAIInvariantError` on blocking-mode violations.
+- Three typed exception classes: `ClampAISafetyError` (base),
+  `ClampAIBudgetError`, `ClampAIInvariantError`.
+- Install: `pip install clampai[langgraph]`
+
+**FastAPI / Starlette middleware** (`clampai/adapters/fastapi_middleware.py`)
+
+- `ClampAIMiddleware(app, budget, cost_per_request, invariants, state_fn)` —
+  Starlette `BaseHTTPMiddleware` subclass.  Every incoming request is evaluated
+  by a `SafetyKernel` before the endpoint handler is called.
+- Budget exhaustion returns **429 Too Many Requests** (JSON).
+  Invariant violation returns **422 Unprocessable Entity** (JSON).
+- `state_fn` hook lets callers inject extra fields (user ID, tenant, etc.)
+  into the state dict checked by invariants.
+- `budget_remaining` and `requests_processed` properties for observability.
+- `reset()` method for re-use across test suites and app restarts.
+- Install: `pip install clampai[fastapi]`
+
+**Improved invariant suggestions** (`clampai/invariants.py`)
+
+- All 25 pre-built invariant factories now return actionable, specific
+  `suggestion` strings that tell the agent exactly what to do when violated.
+  Previously some suggestions were generic placeholders.
+- Fixed a bug in `monotone_increasing_invariant` and
+  `monotone_decreasing_invariant` where the suggestion string captured the
+  `initial_value` (always 0.0 / ∞) instead of describing the violated condition.
+
+**New optional extras** (`pyproject.toml`)
+
+- `clampai[langgraph]` — `langgraph>=0.2`
+- `clampai[fastapi]` — `fastapi>=0.100.0`, `starlette>=0.27.0`
+
+**Tests** (`tests/`)
+
+- `tests/test_langgraph_adapter.py` — 55 tests across 9 classes covering
+  `SafetyNode`, `@clampai_node`, `budget_guard`, `invariant_guard`, and the
+  three exception types.
+- `tests/test_fastapi_middleware.py` — 50 tests across 8 classes covering
+  `ClampAIMiddleware` budget enforcement, invariant violation, state_fn,
+  error response format, and reset behaviour.
+
+**LangChain callback handler** (`clampai/adapters/langchain_callback.py`)
+
+- `ClampAICallbackHandler(budget, cost_per_action, invariants, state_fn, raise_on_block)` —
+  LangChain `BaseCallbackHandler` subclass. Enforces ClampAI budget and
+  invariants in `on_agent_action()` before any tool executes. Requires zero
+  changes to the agent — attach via `config={"callbacks": [handler]}`.
+- `raise_on_block=False` for monitoring-only mode.
+- `budget_remaining`, `actions_blocked`, `tool_calls_made`, `step_count` properties.
+- `reset()` for reuse across agent runs.
+- `ClampAICallbackError(RuntimeError)` — raised (by default) when blocked.
+- Install: `pip install clampai[langchain]`
+
+**CrewAI adapter** (`clampai/adapters/crewai_adapter.py`)
+
+- `ClampAISafeCrewTool(func, name, description, budget, cost, invariants)` —
+  callable CrewAI tool wrapper with full ClampAI enforcement.
+- `ClampAICrewCallback(budget, cost_per_step, invariants)` — step and task
+  callbacks for `Crew(step_callback=..., task_callback=...)`.
+- `@safe_crew_tool(budget, cost, name, description, invariants)` — decorator.
+- `ClampAICrewBudgetError`, `ClampAICrewInvariantError` exception types.
+
+**AutoGen adapter** (`clampai/adapters/autogen_adapter.py`)
+
+- `ClampAISafeAutoGenAgent(fn, budget, cost_per_reply, invariants, agent_name)` —
+  AutoGen reply function wrapper. `check(message, sender, extra_state)` as a
+  standalone gate; `__call__` for `agent.register_reply(...)`.
+- `@autogen_reply_fn(budget, cost_per_reply, agent_name, invariants)` — decorator.
+- Returns `(True, result)` on success, `(False, None)` when `fn=None`.
+- `ClampAIAutoGenBudgetError`, `ClampAIAutoGenInvariantError` exception types.
+
+**HTTP sidecar server** (`clampai/server.py`)
+
+- `ClampAIServer(budget, invariants, host, port, min_action_cost)` — HTTP
+  server wrapping a shared `SafetyKernel`. Zero external dependencies (stdlib
+  `HTTPServer` only; FastAPI optional for full ASGI).
+- Endpoints: `POST /evaluate`, `POST /execute`, `POST /reset`,
+  `GET /status`, `GET /health`.
+- `start_background()` for non-blocking use; `stop()` for teardown.
+- CLI: `python -m clampai.server --budget 1000.0 --port 8765`.
+
+**`reconcile_fn` hook in `SafetyKernel`** (`clampai/formal.py`)
+
+- `SafetyKernel(budget, invariants, ..., reconcile_fn=None)` — new optional
+  parameter. Called post-commit with `(model_state, action, trace_entry)`.
+  If it returns a non-None `State`, that state is used instead of the model
+  state, bridging the spec-reality gap. Failures are silently swallowed.
+- Applies to both `execute()` and `evaluate_and_execute_atomic()`.
+
+**`OTelTraceExporter`** (`clampai/adapters/metrics.py`)
+
+- `OTelTraceExporter(tracer)` — converts `TraceEntry` objects to OpenTelemetry
+  spans. `export_entry(entry)` for manual export; `make_reconcile_fn()` returns
+  a closure compatible with `SafetyKernel(reconcile_fn=...)` for automatic
+  per-commit export.
+
+**Examples**
+
+- `examples/06_langgraph_agent.py` — four LangGraph integration patterns:
+  `@clampai_node`, `budget_guard`, `invariant_guard`, combined usage.
+- `examples/07_fastapi_middleware.py` — FastAPI middleware demo with standalone
+  runner (no uvicorn required).
+
+**Tests** (`tests/`)
+
+- `tests/test_langchain_callback.py` — 45 tests for `ClampAICallbackHandler`.
+- `tests/test_crewai_adapter.py` — 53 tests for `ClampAISafeCrewTool`,
+  `ClampAICrewCallback`, and `@safe_crew_tool`.
+- `tests/test_autogen_adapter.py` — 43 tests for `ClampAISafeAutoGenAgent`
+  and `@autogen_reply_fn`.
+- `tests/test_server.py` — 44 tests for `ClampAIServer` endpoints using real
+  stdlib HTTP connections.
+- `tests/test_reconcile_fn.py` — 30 tests for `reconcile_fn` in `SafetyKernel`.
+
+Total test suite: **1296 tests passing**, ruff clean, mypy clean.
+Chaos fuzzer: **45/45 attacks blocked**. Coverage: **91%**.
+
+### Changed
+
+- `clampai/__init__.py`: `__version__` bumped to `"1.0.0"`.
+- `clampai/adapters/__init__.py`: exports `SafetyNode`, `clampai_node`,
+  `budget_guard`, `invariant_guard`, `ClampAISafetyError`,
+  `ClampAIBudgetError`, `ClampAIInvariantError`, `ClampAIMiddleware`,
+  `ClampAICallbackHandler`, `ClampAICallbackError`,
+  `ClampAISafeCrewTool`, `ClampAICrewCallback`, `safe_crew_tool`,
+  `ClampAICrewBudgetError`, `ClampAICrewInvariantError`,
+  `ClampAISafeAutoGenAgent`, `autogen_reply_fn`,
+  `ClampAIAutoGenBudgetError`, `ClampAIAutoGenInvariantError`,
+  `OTelTraceExporter`.
+
+---
+
+## [0.4.1] — 2026-02-28
+
+### Fixed
+
+- `README.md`: changed three relative file links (`MATHEMATICAL_COMPLIANCE.md`,
+  `VULNERABILITIES.md`, `BENCHMARKS.md`) to absolute GitHub URLs so they
+  resolve correctly on PyPI.
+- `CITATION.cff`: bumped `version` to `0.4.1` and `date-released` to
+  `2026-02-28`.
 
 ---
 
@@ -25,7 +188,7 @@ ConstrAI is in the **0.x** phase while the API stabilises.
 
 ### Added
 
-**`AsyncOrchestrator`** (`constrai/orchestrator.py`)
+**`AsyncOrchestrator`** (`clampai/orchestrator.py`)
 
 - Native-async drop-in replacement for `Orchestrator`. The execution loop,
   LLM call, and kernel commit are all coroutines. Uses `AsyncSafetyKernel`
@@ -42,9 +205,9 @@ ConstrAI is in the **0.x** phase while the API stabilises.
   by a locked atomic commit (`await kernel.execute_atomic()`). If the budget
   changes between the two calls, `execute_atomic` catches it and the action
   is rejected — never silently over-spent.
-- Exported from `constrai` as `AsyncOrchestrator`.
+- Exported from `clampai` as `AsyncOrchestrator`.
 
-**`AsyncSafetyKernel.record_rejection()`** (`constrai/formal.py`)
+**`AsyncSafetyKernel.record_rejection()`** (`clampai/formal.py`)
 
 - Delegation method added to `AsyncSafetyKernel`; routes to the wrapped
   synchronous kernel's `record_rejection()` so the async orchestrator can
@@ -69,7 +232,7 @@ ConstrAI is in the **0.x** phase while the API stabilises.
   - Proof-path artifact written on async run
   - Bayesian priors initialised correctly
 
-**Test utilities module** (`constrai/testing.py`)
+**Test utilities module** (`clampai/testing.py`)
 
 - `make_state(**vars)` — construct a `State` from keyword arguments; one-liner
   for test fixtures.
@@ -87,9 +250,9 @@ ConstrAI is in the **0.x** phase while the API stabilises.
   - `.execute(state, action)` — calls `evaluate_and_execute_atomic`; returns new
     `State` or raises `RuntimeError` if blocked.
   - `.reset()` — recreates the kernel with original budget and invariants.
-- All three exported from `constrai.__init__`.
+- All three exported from `clampai.__init__`.
 
-**New invariant factory functions** (`constrai/invariants.py`)
+**New invariant factory functions** (`clampai/invariants.py`)
 
 - `string_length_invariant(key, max_length, *, enforcement, suggestion)` —
   blocks if `len(str(state[key]))` exceeds `max_length`.  Absent and `None`
@@ -101,14 +264,14 @@ ConstrAI is in the **0.x** phase while the API stabilises.
 - `time_window_rate_invariant(key, max_count, window_seconds, *, enforcement,
   suggestion)` — blocks if `state[key]` contains `>= max_count` float Unix
   timestamps within the last `window_seconds`.  Uses `time.time()` for "now"
-  (patchable in tests via `constrai.invariants._time.time`).  Absent, `None`,
+  (patchable in tests via `clampai.invariants._time.time`).  Absent, `None`,
   and non-list values pass.
 - `json_schema_invariant(key, schema, *, enforcement, suggestion)` — blocks if
   `state[key]` is not a `dict`, or if any field present in both `state[key]`
   and `schema` has the wrong Python type.  `schema` is `Dict[str, type]`.
   Missing fields in the dict are not checked (use `required_fields_invariant`
   for that).  Absent and `None` values pass.
-- All four exported from `constrai.invariants.__all__` and `constrai.__init__`.
+- All four exported from `clampai.invariants.__all__` and `clampai.__init__`.
 
 **Test coverage — new invariants** (`tests/test_new_invariants.py`)
 
@@ -145,10 +308,10 @@ ConstrAI is in the **0.x** phase while the API stabilises.
 - LLM Adapters section with a full table of all supported backends including
   OpenClaw.
 - OpenClaw integration code example with prerequisites.
-- "Why ConstrAI vs. alternatives" comparison table against custom validation,
+- "Why ClampAI vs. alternatives" comparison table against custom validation,
   LangChain callbacks, and METR-style eval harnesses.
 
-**OpenClaw super-wrapper** (`constrai/adapters/openclaw_adapter.py`)
+**OpenClaw super-wrapper** (`clampai/adapters/openclaw_adapter.py`)
 
 Based on a full audit of the [OpenClaw](https://github.com/openclaw/openclaw)
 CLI (`openclaw agent`, `openclaw gateway`, `openclaw models`, `openclaw sessions`,
@@ -196,7 +359,7 @@ New keyword-only parameters added to `OpenClawAdapter` and `AsyncOpenClawAdapter
 - `.complete_rich(prompt, system_prompt)` — returns `OpenClawResponse` instead
   of a plain string.
 
-New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
+New exports from `clampai.adapters`: `OpenClawGateway`, `GatewayHealth`,
 `OpenClawResponse`, `openclaw_session`, `async_openclaw_session`.
 
 **Test coverage — OpenClaw super-wrapper** (`tests/test_openclaw_adapter.py`)
@@ -224,7 +387,7 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
   equivalents (`[OK]`, `ALL ATTACKS BLOCKED`, `[FAIL]`, `[!!]`) for
   professional terminal output and clean CI logs.
 
-**Distributed multi-agent budget** (`constrai/formal.py`)
+**Distributed multi-agent budget** (`clampai/formal.py`)
 
 - `ProcessSharedBudgetController(budget)` — cross-process-safe budget controller
   using `multiprocessing.Value` (int64 shared memory) and `multiprocessing.Lock`
@@ -232,9 +395,9 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
   spawn.  Preserves T1 (spent_net ≤ B₀) and T4 (monotone gross spend) via the
   same `_BudgetLogic` arithmetic as `BudgetController`.  Process-local ledger;
   for a full cross-process audit log write entries to an external store.
-  Exported from `constrai.__init__`.
+  Exported from `clampai.__init__`.
 
-**Native-async safety kernel** (`constrai/formal.py`)
+**Native-async safety kernel** (`clampai/formal.py`)
 
 - `AsyncSafetyKernel(budget, invariants, *, min_action_cost, emergency_actions,
   metrics)` — wraps `SafetyKernel` with a lazily-initialised `asyncio.Lock`.
@@ -243,21 +406,21 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
   blocking OS threads.  All T1–T8 guarantees are preserved.  Full proxy
   surface: `budget`, `invariants`, `step_count`, `max_steps`, `trace`,
   `add_precondition()`, `rollback()`, `status()`.  Exported from
-  `constrai.__init__`.
+  `clampai.__init__`.
 
-**Native-async adapters** (`constrai/adapters/`)
+**Native-async adapters** (`clampai/adapters/`)
 
 - `AsyncAnthropicAdapter(client, model, default_system_prompt)` — native-async
   Anthropic adapter using `anthropic.AsyncAnthropic`.  No thread pool.
   `acomplete()` dispatches to blocking or streaming path.  `complete()` raises
-  `NotImplementedError` (async-only).  Exported from `constrai.adapters`.
+  `NotImplementedError` (async-only).  Exported from `clampai.adapters`.
 - `AsyncOpenAIAdapter(client, model, default_system_prompt)` — native-async
   OpenAI adapter using `openai.AsyncOpenAI` (or `AsyncAzureOpenAI`).
   `_acomplete_streaming()` uses `async for chunk in stream` without a thread
   pool.  `complete()` raises `NotImplementedError` (async-only).  Exported
-  from `constrai.adapters`.
+  from `clampai.adapters`.
 
-**Mock adapter async support** (`constrai/reasoning.py`)
+**Mock adapter async support** (`clampai/reasoning.py`)
 
 - `MockLLMAdapter.acomplete()` — async variant of `complete()`.  No I/O
   occurs, so no thread pool is needed.  Suitable for use with
@@ -298,7 +461,7 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
 
 ### Added
 
-**Zero-config decorator API** (`constrai/api.py`)
+**Zero-config decorator API** (`clampai/api.py`)
 
 - `safe(budget, *, cost_per_call, invariants, state_fn, action_name)` — one-line
   `@safe` decorator that wraps any callable with a dedicated `SafetyKernel`.
@@ -309,17 +472,17 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
   carries the structured `SafetyVerdict` for programmatic handling.
 - `_SafeWrapper` — runtime object installed by `safe()`; exposes `.kernel`,
   `.audit_log`, and `.reset()` for introspection and test isolation.
-- `constrai_safe` — backwards-compatibility alias for `safe`.
-- Both `safe` and `SafetyViolation` exported from `constrai.__init__`.
+- `clampai_safe` — backwards-compatibility alias for `safe`.
+- Both `safe` and `SafetyViolation` exported from `clampai.__init__`.
 
-**MCP adapter** (`constrai/adapters/mcp_server.py`)
+**MCP adapter** (`clampai/adapters/mcp_server.py`)
 
 - `SafeMCPServer(name, budget, cost_per_tool, invariants, min_action_cost)` — a
-  ConstrAI-guarded wrapper around `FastMCP` (from the `mcp` package, optional
+  ClampAI-guarded wrapper around `FastMCP` (from the `mcp` package, optional
   extra).  All tools registered via `@server.tool()` share a single
   `SafetyKernel`.  Per-tool `cost=` and `invariants=` override the server
   defaults.  Thread-safe for concurrent tool calls.
-- Install with `pip install constrai[mcp]`.
+- Install with `pip install clampai[mcp]`.
 
 **Progressive examples** (`examples/`)
 
@@ -335,7 +498,7 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
 - `pyproject.toml` — replaces `setup.py` with PEP 621-compliant packaging.
   Extras: `anthropic`, `openai`, `langchain`, `mcp`, `prometheus`,
   `opentelemetry`, `dev`.
-- `constrai/py.typed` — PEP 561 marker file for downstream type-checkers.
+- `clampai/py.typed` — PEP 561 marker file for downstream type-checkers.
 - `.github/workflows/test.yml` — CI matrix: Python 3.9, 3.11, 3.13 ×
   ubuntu-latest and macos-latest; 85 % coverage floor (adapter modules excluded
   from measurement; covered by `test-integrations.yml`).  `ruff check` and
@@ -345,14 +508,14 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
 - `.github/workflows/test-integrations.yml` — nightly integration matrix for
   `[anthropic]`, `[openai]`, `[langchain]`, and `[prometheus]` extras.
 
-**Adapters package** (`constrai/adapters/`)
+**Adapters package** (`clampai/adapters/`)
 
 - `AnthropicAdapter` — production-ready Anthropic Claude adapter with streaming
   (`stream_tokens` callback) and async (`acomplete()`) support.
 - `OpenAIAdapter` — production-ready OpenAI adapter with the same streaming and
   async interface as `AnthropicAdapter`.
-- `langchain_tool.py` — `ConstrAISafeTool`, a `BaseTool` subclass that wraps any
-  ConstrAI action as a kernel-gated LangChain tool.  Every tool call passes
+- `langchain_tool.py` — `ClampAISafeTool`, a `BaseTool` subclass that wraps any
+  ClampAI action as a kernel-gated LangChain tool.  Every tool call passes
   through `SafetyKernel.evaluate()` before execution.
 - `metrics.py` — `PrometheusMetrics` and `OTelMetrics`, concrete implementations
   of the `MetricsBackend` protocol defined in `formal.py`.
@@ -360,14 +523,14 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
     registration, label-aware counters/histograms/gauges.
   - `OTelMetrics`: OpenTelemetry API adapter; lazy instrument creation; never
     raises (failures silently absorbed so the kernel is never disrupted).
-  Both are exported from `constrai.adapters`.
+  Both are exported from `clampai.adapters`.
 
 **LLMAdapter API hardening**
 
 - Keyword-only `*` separator added between `system_prompt` and `temperature` in
   every public `complete()` / `acomplete()` signature:
-  - `constrai.reasoning.LLMAdapter` (Protocol)
-  - `constrai.reasoning.MockLLMAdapter`
+  - `clampai.reasoning.LLMAdapter` (Protocol)
+  - `clampai.reasoning.MockLLMAdapter`
   - `AnthropicAdapter.complete()` / `acomplete()`
   - `OpenAIAdapter.complete()` / `acomplete()`
   This makes all callers pass `temperature=`, `max_tokens=`, and `stream_tokens=`
@@ -403,7 +566,7 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
   "Zero-config API: `@safe`" section; updated installation extras table and
   progressive-examples table.
 - `OWASP_MAPPING.md` — maps all ten OWASP LLM Top 10 (2025) risks to the
-  ConstrAI theorems that address them.
+  ClampAI theorems that address them.
 - `CHANGELOG.md` — this file.
 
 **Examples**
@@ -435,23 +598,23 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
 
 ### Fixed
 
-- `constrai/active_hjb_barrier.py` — `Dict` used in type annotations but not
+- `clampai/active_hjb_barrier.py` — `Dict` used in type annotations but not
   imported; added to `from typing import`.
-- `constrai/formal.py` — `State.__slots__` attributes (`_vars`, `_json`, `_hash`)
+- `clampai/formal.py` — `State.__slots__` attributes (`_vars`, `_json`, `_hash`)
   lacked class-level annotations; mypy could not resolve them.  Added
   `_vars: Mapping[str, Any]`, `_json: str`, `_hash: int`.  Also added missing
   `-> None` return types on `__init__`, `__setattr__`, `__delattr__`,
   `__post_init__`, `ExecutionTrace.__init__`, and `SafetyKernel.add_precondition`.
-- `constrai/hardening.py` — three `implicit-optional` violations (`working_dir`,
+- `clampai/hardening.py` — three `implicit-optional` violations (`working_dir`,
   `command_allowlist`, `ids`) changed to `Optional[...]`.  Loop variable `p` in
   `_chi2p` shadowed the method parameter `p` (renamed to `pval`).
   `VALID_TRANSITIONS` annotated as `ClassVar`.
-- `constrai/guards.py` — `Callable` used in a return type annotation but not
+- `clampai/guards.py` — `Callable` used in a return type annotation but not
   imported (F821 undefined name); added to `from typing import`.  Ambiguous
   variable names `l`/`r` renamed to `lv`/`rv`.
-- `constrai/invariants.py` — missing default-argument type annotations on inner
+- `clampai/invariants.py` — missing default-argument type annotations on inner
   closures in `no_sensitive_substring_invariant`; added `fl: List[str]`.
-- `constrai/adapters/mcp_server.py` — removed redundant `# type: ignore[import]`
+- `clampai/adapters/mcp_server.py` — removed redundant `# type: ignore[import]`
   on the `FastMCP` import; `ignore_missing_imports = true` in mypy already handles
   missing optional stubs.
 - `SafeHoverState.to_action()` (`reference_monitor.py`): now constructs
@@ -525,7 +688,7 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
 - **Saliency engine** (`saliency.py`): Integral Sensitivity Filter for reducing
   token usage while preserving safety-relevant state visibility.
 - **Verification log** (`verification_log.py`): proof record writer.
-- Full test suite: `test_constrai.py` (T1–T8 unit tests), `test_monte_carlo.py`
+- Full test suite: `test_clampai.py` (T1–T8 unit tests), `test_monte_carlo.py`
   (1,000-run probabilistic validation), `chaos_fuzzer.py` (45 adversarial
   attack scenarios), `test_composition.py`, `test_integration.py`,
   `test_soft_gaps_fixed.py`, `test_boundary_enforcement.py`.
@@ -538,5 +701,5 @@ New exports from `constrai.adapters`: `OpenClawGateway`, `GatewayHealth`,
 
 ### Added
 
-- PyPI name reservation for `constrai`.
+- PyPI name reservation for `clampai`.
 - Placeholder `README.md` and `LICENSE` (MIT).

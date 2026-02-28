@@ -1,5 +1,5 @@
 """
-Tests for the @safe function (constrai/api.py).
+Tests for the @safe function (clampai/api.py).
 
 Covers:
   - Budget enforcement: blocked after budget exhausted (T1)
@@ -20,12 +20,12 @@ import time
 
 import pytest
 
-from constrai import (
+from clampai import (
     Invariant,
     SafetyViolation,
     safe,
 )
-from constrai.api import _SafeWrapper
+from clampai.api import _SafeWrapper
 
 
 @pytest.fixture()
@@ -395,7 +395,7 @@ class TestThreadSafety:
 
 class TestKernelProperty:
     def test_kernel_is_safety_kernel(self, simple_fn):
-        from constrai import SafetyKernel
+        from clampai import SafetyKernel
         assert isinstance(simple_fn.kernel, SafetyKernel)
 
     def test_kernel_budget_starts_at_configured_value(self):
@@ -429,7 +429,7 @@ class TestEdgeCases:
     def test_function_with_exception_charges_budget(self):
         """Budget IS charged when the action is approved, even if the function raises.
 
-        ConstrAI charges for the action, not its result. The function's exception
+        ClampAI charges for the action, not its result. The function's exception
         is propagated unmodified.
         """
         @safe(budget=20.0, cost_per_call=5.0)
@@ -459,10 +459,10 @@ class TestEdgeCases:
             fn_a()
         assert fn_b.kernel.budget.remaining == pytest.approx(0.0)
 
-    def test_constrai_safe_alias_works(self):
-        """constrai_safe is a backwards-compat alias for safe."""
-        from constrai import constrai_safe
-        assert constrai_safe is safe
+    def test_clampai_safe_alias_works(self):
+        """clampai_safe is a backwards-compat alias for safe."""
+        from clampai import clampai_safe
+        assert clampai_safe is safe
 
 
 if __name__ == "__main__":

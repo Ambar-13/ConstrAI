@@ -1,8 +1,8 @@
-# ConstrAI Framework Guide
+# ClampAI Framework Guide
 
-## What ConstrAI Does
+## What ClampAI Does
 
-ConstrAI is a safety framework for AI agents. It ensures that agents can't break rules or exceed budgets by enforcing at the execution layer, not in prompts. See the Known Limitations section and `docs/VULNERABILITIES.md` for the cases where coverage is partial.
+ClampAI is a safety framework for AI agents. It ensures that agents can't break rules or exceed budgets by enforcing at the execution layer, not in prompts. See the Known Limitations section and `docs/VULNERABILITIES.md` for the cases where coverage is partial.
 
 **The key insight**: Safety happens at the execution level, not the prompt level. We let the LLM think freely, but we verify every action before it runs.
 
@@ -19,7 +19,7 @@ The foundation that everything else builds on.
 States are snapshots of the world. You can't modify them directly - any change creates a new state.
 
 ```python
-from constrai import State
+from clampai import State
 
 # Create
 state = State({"balance": 100, "deployed": False})
@@ -39,7 +39,7 @@ new_state = state.with_updates({"balance": 95})
 Actions don't contain code - they describe what changes:
 
 ```python
-from constrai import Effect
+from clampai import Effect
 
 Effect("balance", "decrement", 50)      # balance -= 50
 Effect("status", "set", "deployed")     # status = "deployed"
@@ -54,7 +54,7 @@ Effect("counter", "increment", 1)       # counter += 1
 Safety rules that must hold after every action:
 
 ```python
-from constrai import Invariant
+from clampai import Invariant
 
 Invariant(
     name="budget_safe",
@@ -67,14 +67,14 @@ Invariant(
 
 ### Layer 2: Reference Monitor
 
-Enforces constraints across multiple dimensions.
+Enforces clampaints across multiple dimensions.
 
 #### Information Flow Control (IFC)
 
 Prevents data from flowing to places it shouldn't:
 
 ```python
-from constrai import DataLabel, SecurityLevel
+from clampai import DataLabel, SecurityLevel
 
 # Mark sensitive data
 secret_label = DataLabel(SecurityLevel.SECRET)
@@ -90,7 +90,7 @@ public_label = DataLabel(SecurityLevel.PUBLIC)
 Prevents overconsumption via Control Barrier Functions:
 
 ```python
-from constrai import ControlBarrierFunction
+from clampai import ControlBarrierFunction
 
 def budget_h(state):
     """Barrier function: how much budget margin do we have?"""
@@ -108,7 +108,7 @@ barrier = ControlBarrierFunction(h=budget_h, alpha=0.1)
 Defines areas of state space to avoid:
 
 ```python
-from constrai import CaptureBasin
+from clampai import CaptureBasin
 
 CaptureBasin(
     name="bankruptcy",
@@ -153,10 +153,10 @@ If any check fails → action is rejected, state unchanged.
 
 ### Boundary Detection
 
-Detects when variables are approaching constraint violations:
+Detects when variables are approaching clampaint violations:
 
 ```python
-from constrai import JacobianFusion
+from clampai import JacobianFusion
 
 jacobian = JacobianFusion()
 report = jacobian.compute_gradients(state)
@@ -178,7 +178,7 @@ for variable, severity in report.severity_scores.items():
 Actively prevents dangerous actions:
 
 ```python
-from constrai import AuthoritativeHJBBarrier
+from clampai import AuthoritativeHJBBarrier
 
 barrier = AuthoritativeHJBBarrier()
 
@@ -197,13 +197,13 @@ if not check.safe:
 ### Task Composition
 
 Combine verified subtasks safely using the `SuperTask` / `TaskComposer` API in
-`constrai/operadic_composition.py`. Interface compatibility is checked at
+`clampai/operadic_composition.py`. Interface compatibility is checked at
 composition time (OC-1); budget and invariants are inherited by the composed
 task (OC-2).
 
 ```python
-# Conceptual sketch — see constrai/operadic_composition.py for full API
-from constrai import SuperTask, TaskComposer
+# Conceptual sketch — see clampai/operadic_composition.py for full API
+from clampai import SuperTask, TaskComposer
 
 # Register two independently-verified subtasks
 composer = TaskComposer()
@@ -223,7 +223,7 @@ if combined:
 
 ## The 8 Theorems
 
-ConstrAI proves these theorems by construction:
+ClampAI proves these theorems by construction:
 
 | Theorem | What It Guarantees | How |
 |---------|-------------------|-----|
@@ -243,7 +243,7 @@ See `docs/THEOREMS.md` for detailed proofs.
 ## Working Example
 
 ```python
-from constrai import (
+from clampai import (
     State, Effect, ActionSpec, Invariant, CaptureBasin,
     TaskDefinition, Orchestrator
 )
@@ -309,7 +309,7 @@ print(f"Budget used: {result.spent}")
 ### State Management
 
 ```python
-from constrai import State
+from clampai import State
 
 s = State({"key": value})
 s.get("key")                          # Read
@@ -320,7 +320,7 @@ s.without_keys(["key"])               # Remove
 ### Actions
 
 ```python
-from constrai import Effect, ActionSpec
+from clampai import Effect, ActionSpec
 
 effect = Effect(variable, mode, value)
 # Modes: set, increment, decrement, multiply, append, remove, delete
@@ -341,7 +341,7 @@ next_state = action.simulate(current_state)
 ### Safety Rules
 
 ```python
-from constrai import Invariant, CaptureBasin, ControlBarrierFunction
+from clampai import Invariant, CaptureBasin, ControlBarrierFunction
 
 # Rule that must always hold
 invariant = Invariant("name", predicate, "description")
@@ -349,14 +349,14 @@ invariant = Invariant("name", predicate, "description")
 # Region to avoid
 basin = CaptureBasin("name", is_bad, max_steps=5)
 
-# Smooth constraint boundary
+# Smooth clampaint boundary
 barrier = ControlBarrierFunction(h=function, alpha=0.1)
 ```
 
 ### Execution
 
 ```python
-from constrai import TaskDefinition, Orchestrator
+from clampai import TaskDefinition, Orchestrator
 
 task = TaskDefinition(
     goal="What should happen",
@@ -386,7 +386,7 @@ result = orch.run()
 
 ---
 
-## When to Use ConstrAI
+## When to Use ClampAI
 
 ✓ When you need hard safety guarantees  
 ✓ When actions cost money or have side effects  
@@ -394,7 +394,7 @@ result = orch.run()
 ✓ When you can't afford mistakes
 
 ✗ When you need extreme performance  
-✗ When you have no constraints  
+✗ When you have no clampaints  
 ✗ When safety requirements are vague
 
 ---
@@ -423,4 +423,4 @@ The formal theorems (T1-T8) operate over *declared* `Effect` objects in the kern
 | Real-world, no proxy declared | `http_request()` with no declared effects | PROVEN | NOT APPLICABLE | NOT APPLICABLE | Budget enforced; invariants cannot simulate undeclared effects |
 | Opaque shell/code execution | `execute_shell("rm ...")` | PROVEN | PATTERN-MATCH ONLY | NOT APPLICABLE | Pattern classifier feeds ActionSpec; kernel checks declared effects |
 
-The rows where T3 and T7 show NOT APPLICABLE are not bugs - they reflect an honest boundary: ConstrAI's kernel can only simulate and invert effects it knows about. Actions that touch the real world without a declared proxy leave the kernel's model intact but create a spec-reality gap that the `EnvironmentReconciler` (`hardening.py:413-469`) is designed to detect at the next reconciliation cycle.
+The rows where T3 and T7 show NOT APPLICABLE are not bugs - they reflect an honest boundary: ClampAI's kernel can only simulate and invert effects it knows about. Actions that touch the real world without a declared proxy leave the kernel's model intact but create a spec-reality gap that the `EnvironmentReconciler` (`hardening.py:413-469`) is designed to detect at the next reconciliation cycle.

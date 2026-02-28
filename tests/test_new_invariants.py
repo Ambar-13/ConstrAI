@@ -10,8 +10,8 @@ from unittest.mock import patch
 
 import pytest
 
-from constrai.formal import State
-from constrai.invariants import (
+from clampai.formal import State
+from clampai.invariants import (
     json_schema_invariant,
     pii_guard_invariant,
     string_length_invariant,
@@ -239,7 +239,7 @@ class TestTimeWindowRateInvariant:
         fake_now = 1_000_000.0
         inv = time_window_rate_invariant("ts", max_count=1, window_seconds=10.0)
         ts = [fake_now - 10.0]  # exactly at boundary (now - t == window_seconds → included)
-        with patch("constrai.invariants._time.time", return_value=fake_now):
+        with patch("clampai.invariants._time.time", return_value=fake_now):
             ok, _ = inv.check(_state(ts=ts))
         assert not ok  # count=1 >= max_count=1
 
@@ -259,7 +259,7 @@ class TestTimeWindowRateInvariant:
         fake_now = 1_000_000.0
         inv = time_window_rate_invariant("ts", max_count=2, window_seconds=60.0)
         ts = [fake_now - 30.0, fake_now - 45.0]  # both within 60s of fake_now
-        with patch("constrai.invariants._time.time", return_value=fake_now):
+        with patch("clampai.invariants._time.time", return_value=fake_now):
             ok, _ = inv.check(_state(ts=ts))
         assert not ok  # count=2 >= max_count=2
 

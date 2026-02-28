@@ -1,11 +1,11 @@
-# ConstrAI: Formal Reference Monitor
+# ClampAI: Formal Reference Monitor
 ## Deterministic Enforcement for Untrusted Agents
 
 ---
 
 ## Executive Summary
 
-ConstrAI implements a **Formal Reference Monitor** that treats all LLM-proposed actions as untrusted transitions on a state-space manifold. Every action is subjected to an authoritative, non-bypassable enforcement layer *before* execution, ensuring mathematical guarantees on safety, liveness, and resource consumption.
+ClampAI implements a **Formal Reference Monitor** that treats all LLM-proposed actions as untrusted transitions on a state-space manifold. Every action is subjected to an authoritative, non-bypassable enforcement layer *before* execution, ensuring mathematical guarantees on safety, liveness, and resource consumption.
 
 **Key Innovation:** The reference monitor is the *sole gatekeeper* for environment transitions. If it rejects an action, the system returns to the identity state (s' = s) with zero side effects. There is no "third path"—either the monitor approves and the formal kernel executes, or neither happens.
 
@@ -68,7 +68,7 @@ Public ⊑ Internal ⊑ PII ⊑ Secret
 
 **Usage:**
 ```python
-from constrai import SecurityLevel, DataLabel, ReferenceMonitor
+from clampai import SecurityLevel, DataLabel, ReferenceMonitor
 
 monitor = ReferenceMonitor(ifc_enabled=True)
 monitor.set_ifc_label("customer_ssn", DataLabel(SecurityLevel.PII))
@@ -125,7 +125,7 @@ monitor.add_cbf(
 
 ### M3: Quadratic Programming (QP) Minimum-Intervention Repair
 
-**Theorem:** If an action violates a constraint, repair it to the closest feasible action in Euclidean distance.
+**Theorem:** If an action violates a clampaint, repair it to the closest feasible action in Euclidean distance.
 
 $$a^* = \arg\min_{\|a' - a_{\text{agent}}\|_2} \text{ s.t. } a' \in \text{SafeSet}$$
 
@@ -150,8 +150,8 @@ class QPProjector:
             return max_cost, True  # Repair
     
     def project_action(self, action: ActionSpec, state: State, 
-                      constraints: List[Callable]) -> (ActionSpec, bool):
-        """Repair action parameters to satisfy constraints."""
+                      clampaints: List[Callable]) -> (ActionSpec, bool):
+        """Repair action parameters to satisfy clampaints."""
         # ...
 ```
 

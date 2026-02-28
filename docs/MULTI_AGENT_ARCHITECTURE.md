@@ -1,6 +1,6 @@
-# Multi-Agent Architecture in ConstrAI
+# Multi-Agent Architecture in ClampAI
 
-**Status:** ConstrAI v0.x — single-process multi-agent is supported; multi-process is not.  
+**Status:** ClampAI v0.x — single-process multi-agent is supported; multi-process is not.  
 **Date:** 2026-02-27
 
 ---
@@ -41,7 +41,7 @@
 
 ### Why This Is Correct
 
-`SafetyKernel.evaluate_and_execute_atomic()` acquires `self._lock` (a `threading.Lock`) before performing the check-charge-commit sequence and releases it only after all three operations complete. The lock is defined at `constrai/formal.py:746`.
+`SafetyKernel.evaluate_and_execute_atomic()` acquires `self._lock` (a `threading.Lock`) before performing the check-charge-commit sequence and releases it only after all three operations complete. The lock is defined at `clampai/formal.py:746`.
 
 This means:
 
@@ -53,7 +53,7 @@ This means:
 ### Usage
 
 ```python
-from constrai import SafetyKernel, Invariant, State, ActionSpec, Effect
+from clampai import SafetyKernel, Invariant, State, ActionSpec, Effect
 import threading
 
 # Create ONE kernel shared across all orchestrators
@@ -100,13 +100,13 @@ See `examples/multi_agent_shared_kernel.py` for a complete working example.
 
 The shared-kernel pattern preserves all eight theorems (T1-T8) across threads **within the same process**. The proof is the same as the single-agent case: `evaluate_and_execute_atomic` is the single serialization point, and the lock ensures that no two threads can be in the critical section simultaneously.
 
-The only cost is contention: if many threads call `evaluate_and_execute_atomic` at high frequency, they will serialize at the lock. For ConstrAI's typical use case (agent decision loops at human-readable timescales), this is not a bottleneck - safety checks complete in ~0.061 ms per the benchmark results.
+The only cost is contention: if many threads call `evaluate_and_execute_atomic` at high frequency, they will serialize at the lock. For ClampAI's typical use case (agent decision loops at human-readable timescales), this is not a bottleneck - safety checks complete in ~0.061 ms per the benchmark results.
 
 ---
 
 ## Not Supported: Multi-Process Coordination
 
-When multiple OS processes each hold their own `SafetyKernel` instance and need to coordinate over a shared logical budget or shared invariants, ConstrAI provides no solution. This is not an implementation gap that can be closed by adding a flag - it is a class of distributed systems problems that each require deliberate architectural choices with significant trade-offs.
+When multiple OS processes each hold their own `SafetyKernel` instance and need to coordinate over a shared logical budget or shared invariants, ClampAI provides no solution. This is not an implementation gap that can be closed by adding a flag - it is a class of distributed systems problems that each require deliberate architectural choices with significant trade-offs.
 
 ### Problem 1: Distributed TOCTOU
 
@@ -149,9 +149,9 @@ Each of these is a genuine engineering option for a future version, not a simple
 
 ## Open Research Problem Statement
 
-> **ConstrAI v0.x does not solve distributed multi-agent safety. The RFC tracks this as an open research problem.**
+> **ClampAI v0.x does not solve distributed multi-agent safety. The RFC tracks this as an open research problem.**
 
-The core difficulty is that ConstrAI's safety guarantees (T1-T8) are proven over a single, coherent state machine with a single budget controller and a single execution trace. Distributing these across process or machine boundaries requires choosing a consistency model (strong, causal, eventual), a coordination protocol (locking, consensus, CRDT), and a failure model (fail-stop, Byzantine, partition-tolerant) - and each choice invalidates or weakens some subset of the current proofs.
+The core difficulty is that ClampAI's safety guarantees (T1-T8) are proven over a single, coherent state machine with a single budget controller and a single execution trace. Distributing these across process or machine boundaries requires choosing a consistency model (strong, causal, eventual), a coordination protocol (locking, consensus, CRDT), and a failure model (fail-stop, Byzantine, partition-tolerant) - and each choice invalidates or weakens some subset of the current proofs.
 
 Specific open questions:
 
@@ -166,8 +166,8 @@ Contributions addressing these questions are welcome. See `CONTRIBUTING.md`.
 
 ## References
 
-- `constrai/formal.py:703-970` - `SafetyKernel` and `evaluate_and_execute_atomic`
-- `constrai/formal.py:746` - `threading.Lock` definition
+- `clampai/formal.py:703-970` - `SafetyKernel` and `evaluate_and_execute_atomic`
+- `clampai/formal.py:746` - `threading.Lock` definition
 - `examples/multi_agent_shared_kernel.py` - Working single-process shared kernel example
 - `MATHEMATICAL_COMPLIANCE.md` - Full proof details for T1-T8
 - `docs/VULNERABILITIES.md` - Known limitations including multi-agent gaps

@@ -1,15 +1,15 @@
-# RFC: Distributed Multi-Agent Safety for ConstrAI
+# RFC: Distributed Multi-Agent Safety for ClampAI
 
 **Status:** Open Problem / Pre-RFC
 **Author:** Ambar (ambar13@u.nus.edu)
 **Date:** 2026-02-27
-**Tracking:** https://github.com/Ambar-13/ConstrAI/issues (label: `multi-agent`)
+**Tracking:** https://github.com/Ambar-13/ClampAI/issues (label: `multi-agent`)
 
 ---
 
 ## Summary
 
-ConstrAI's safety kernel (T1–T8) is proven correct for a **single `SafetyKernel` instance in a single OS process**. This RFC documents the open problem of extending those guarantees to multiple agents running in separate processes, and surveys the distributed systems techniques that could be used to close that gap. No solution is proposed for v0.x. A concrete design is proposed for v1.0 consideration.
+ClampAI's safety kernel (T1–T8) is proven correct for a **single `SafetyKernel` instance in a single OS process**. This RFC documents the open problem of extending those guarantees to multiple agents running in separate processes, and surveys the distributed systems techniques that could be used to close that gap. No solution is proposed for v0.x. A concrete design is proposed for v1.0 consideration.
 
 For the current single-process multi-agent pattern (multiple `Orchestrator` instances sharing one `SafetyKernel` via `threading.Lock`), see `docs/MULTI_AGENT_ARCHITECTURE.md`.
 
@@ -17,7 +17,7 @@ For the current single-process multi-agent pattern (multiple `Orchestrator` inst
 
 ## Motivation
 
-As ConstrAI is used in production, deployments are increasingly multi-process:
+As ClampAI is used in production, deployments are increasingly multi-process:
 
 - **Horizontal scaling:** Multiple worker processes handle independent tasks, each with a local `SafetyKernel`, but needing to respect a shared global budget.
 - **Specialized agents:** A planner process and executor processes operate concurrently. The planner's budget estimates must be reflected in the executors' available spend.
@@ -55,7 +55,7 @@ T3 checks `inv.predicate(simulated_state)` before committing. In a multi-process
 
 ## Survey of Applicable Techniques
 
-| Technique | Problem Addressed | ConstrAI Fit | Trade-offs |
+| Technique | Problem Addressed | ClampAI Fit | Trade-offs |
 |-----------|------------------|--------------|------------|
 | **Distributed lock** (Redis SETNX, etcd lease) | P1: TOCTOU | High — direct replacement for `threading.Lock` | ~1–5 ms per lock; lock-holder crash → blocked; must tune lease TTL |
 | **Two-Phase Commit (2PC)** | P1, P2 | Medium — heavyweight for per-action coordination | Blocking on coordinator failure; O(n) messages per commit; latency scales with agent count |
@@ -142,7 +142,7 @@ Contributions are welcome. Open a GitHub Discussion tagged `multi-agent` to prop
 ## References
 
 - `docs/MULTI_AGENT_ARCHITECTURE.md` — Current limitations and single-process shared-kernel pattern
-- `constrai/formal.py:703-970` — `SafetyKernel`, `evaluate_and_execute_atomic`, `threading.Lock`
+- `clampai/formal.py:703-970` — `SafetyKernel`, `evaluate_and_execute_atomic`, `threading.Lock`
 - `MATHEMATICAL_COMPLIANCE.md §What These Proofs Do Not Cover` — Item 3: multi-process coordination
 - Lamport, L. (1978). "Time, Clocks, and the Ordering of Events in a Distributed System." *CACM*.
 - Gray, J. (1978). "Notes on Data Base Operating Systems." *Operating Systems: An Advanced Course*.

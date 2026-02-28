@@ -1,4 +1,4 @@
-# ConstrAI Mathematical Compliance Document
+# ClampAI Mathematical Compliance Document
 
 **Version:** 0.3.0  
 **Date:** 2026-02-27  
@@ -30,12 +30,12 @@ This document is intentionally conservative. Claims are tagged `PROVEN`, `CONDIT
 
 | Element | File | Lines |
 |---------|------|-------|
-| `BudgetController` class | `constrai/formal.py` | 446-574 |
-| `BudgetController.__init__` - integer-scaled budget | `constrai/formal.py` | 472-480 |
-| `BudgetController.can_afford` - pre-commit guard | `constrai/formal.py` | 511-522 |
-| `BudgetController.charge` - commit + post-commit assertion | `constrai/formal.py` | 523-538 |
-| `SafetyKernel.evaluate` - Check 1 (budget) | `constrai/formal.py` | 797-804 |
-| `SafetyKernel.evaluate_and_execute_atomic` - atomic lock | `constrai/formal.py` | 918-970 |
+| `BudgetController` class | `clampai/formal.py` | 446-574 |
+| `BudgetController.__init__` - integer-scaled budget | `clampai/formal.py` | 472-480 |
+| `BudgetController.can_afford` - pre-commit guard | `clampai/formal.py` | 511-522 |
+| `BudgetController.charge` - commit + post-commit assertion | `clampai/formal.py` | 523-538 |
+| `SafetyKernel.evaluate` - Check 1 (budget) | `clampai/formal.py` | 797-804 |
+| `SafetyKernel.evaluate_and_execute_atomic` - atomic lock | `clampai/formal.py` | 918-970 |
 
 ### Proof Strategy
 
@@ -57,7 +57,7 @@ Induction over execution steps.
 
 ### Known Limitations
 
-- Multi-process budget aggregation is not implemented. Two processes sharing a logical budget must coordinate externally; ConstrAI does not provide this.
+- Multi-process budget aggregation is not implemented. Two processes sharing a logical budget must coordinate externally; ClampAI does not provide this.
 - The integer scaling factor (`_SCALE = 1000`) means costs below `0.001` are rounded to zero and bypass the budget check. Set `min_action_cost > 0` to prevent this (enforced by T2's precondition check).
 
 ---
@@ -72,10 +72,10 @@ Induction over execution steps.
 
 | Element | File | Lines |
 |---------|------|-------|
-| `SafetyKernel.__init__` - computes `max_steps` | `constrai/formal.py` | 786-796 |
-| `SafetyKernel.evaluate` - Check 0 (min cost) | `constrai/formal.py` | 837-848 |
-| `SafetyKernel.evaluate` - Check 2 (step limit) | `constrai/formal.py` | 807-819 |
-| Precondition enforcement (`min_action_cost > 0`) | `constrai/formal.py` | 788-790 |
+| `SafetyKernel.__init__` - computes `max_steps` | `clampai/formal.py` | 786-796 |
+| `SafetyKernel.evaluate` - Check 0 (min cost) | `clampai/formal.py` | 837-848 |
+| `SafetyKernel.evaluate` - Check 2 (step limit) | `clampai/formal.py` | 807-819 |
+| Precondition enforcement (`min_action_cost > 0`) | `clampai/formal.py` | 788-790 |
 
 ### Proof Strategy
 
@@ -113,11 +113,11 @@ Additionally, the step counter check (Check 2) provides an independent hard stop
 
 | Element | File | Lines |
 |---------|------|-------|
-| `Invariant` class | `constrai/formal.py` | 373-442 |
-| `Invariant.__init__` - enforcement mode validation | `constrai/formal.py` | 400-418 |
-| `Invariant.check` - predicate evaluation | `constrai/formal.py` | 419-430 |
-| `SafetyKernel.evaluate` - Check 3 (invariant loop) | `constrai/formal.py` | 820-855 |
-| `ActionSpec.simulate` - check-before-commit on copy | `constrai/formal.py` | 307-318 |
+| `Invariant` class | `clampai/formal.py` | 373-442 |
+| `Invariant.__init__` - enforcement mode validation | `clampai/formal.py` | 400-418 |
+| `Invariant.check` - predicate evaluation | `clampai/formal.py` | 419-430 |
+| `SafetyKernel.evaluate` - Check 3 (invariant loop) | `clampai/formal.py` | 820-855 |
+| `ActionSpec.simulate` - check-before-commit on copy | `clampai/formal.py` | 307-318 |
 
 ### Proof Strategy
 
@@ -159,10 +159,10 @@ Induction using check-before-commit discipline.
 
 | Element | File | Lines |
 |---------|------|-------|
-| `BudgetController` - `_spent_gross_i` field | `constrai/formal.py` | 476-480 |
-| `BudgetController.charge` - increment + assertion | `constrai/formal.py` | 523-538 |
-| `BudgetController.refund` - only `_refunded_i` incremented | `constrai/formal.py` | 540-552 |
-| Post-commit assertion: `assert self._spent_gross_i >= old_gross` | `constrai/formal.py` | 534-535 |
+| `BudgetController` - `_spent_gross_i` field | `clampai/formal.py` | 476-480 |
+| `BudgetController.charge` - increment + assertion | `clampai/formal.py` | 523-538 |
+| `BudgetController.refund` - only `_refunded_i` incremented | `clampai/formal.py` | 540-552 |
+| Post-commit assertion: `assert self._spent_gross_i >= old_gross` | `clampai/formal.py` | 534-535 |
 
 ### Proof Strategy
 
@@ -195,10 +195,10 @@ None significant. This is the simplest of the eight theorems.
 
 | Element | File | Lines |
 |---------|------|-------|
-| `SafetyKernel.evaluate` - simulate-only, no side effects | `constrai/formal.py` | 768-856 |
-| `SafetyKernel.execute` - commit block | `constrai/formal.py` | 857-917 |
-| `SafetyKernel.evaluate_and_execute_atomic` - under `_lock` | `constrai/formal.py` | 918-970 |
-| `ActionSpec.simulate` - operates on copy, not original | `constrai/formal.py` | 307-318 |
+| `SafetyKernel.evaluate` - simulate-only, no side effects | `clampai/formal.py` | 768-856 |
+| `SafetyKernel.execute` - commit block | `clampai/formal.py` | 857-917 |
+| `SafetyKernel.evaluate_and_execute_atomic` - under `_lock` | `clampai/formal.py` | 918-970 |
+| `ActionSpec.simulate` - operates on copy, not original | `clampai/formal.py` | 307-318 |
 
 ### Proof Strategy
 
@@ -237,11 +237,11 @@ Construction.
 
 | Element | File | Lines |
 |---------|------|-------|
-| `TraceEntry` - frozen dataclass | `constrai/formal.py` | 576-611 |
-| `TraceEntry.compute_hash` - SHA-256 over all fields | `constrai/formal.py` | 603-611 |
-| `ExecutionTrace` class | `constrai/formal.py` | 613-671 |
-| `ExecutionTrace.append` - links previous hash | `constrai/formal.py` | 620-636 |
-| `ExecutionTrace.verify_integrity` - full chain check | `constrai/formal.py` | 638-647 |
+| `TraceEntry` - frozen dataclass | `clampai/formal.py` | 576-611 |
+| `TraceEntry.compute_hash` - SHA-256 over all fields | `clampai/formal.py` | 603-611 |
+| `ExecutionTrace` class | `clampai/formal.py` | 613-671 |
+| `ExecutionTrace.append` - links previous hash | `clampai/formal.py` | 620-636 |
+| `ExecutionTrace.verify_integrity` - full chain check | `clampai/formal.py` | 638-647 |
 
 ### Proof Strategy
 
@@ -259,7 +259,7 @@ Construction.
 ### Assumptions
 
 1. The `_entries` list is not accessed directly via Python's name-mangling introspection. Python private attributes provide naming protection, not cryptographic protection.
-2. SHA-256 is treated as collision-resistant for this application (standard cryptographic assumption, not a formally proven property within ConstrAI).
+2. SHA-256 is treated as collision-resistant for this application (standard cryptographic assumption, not a formally proven property within ClampAI).
 3. Integrity only covers the in-memory trace. The trace is not persisted to disk by default. Persistence and verification across restarts require additional implementation.
 4. An attacker with the ability to run arbitrary Python in the same process can forge trace entries. T6 deters accidental or casual tampering, not a determined attacker with code execution in the process.
 
@@ -281,12 +281,12 @@ Construction.
 
 | Element | File | Lines |
 |---------|------|-------|
-| `ActionSpec.compute_inverse_effects` - T7 proof in docstring | `constrai/formal.py` | 319-394 |
-| `Effect.inverse` - algebraic inverse per operation | `constrai/formal.py` | 237-265 |
-| `SafetyKernel.rollback` | `constrai/formal.py` | 988-999 |
-| `BudgetController.refund` - budget component of rollback | `constrai/formal.py` | 540-552 |
-| `InverseAlgebra.compute_inverse_from_states` | `constrai/inverse_algebra.py` | 100-136 |
-| `RollbackRecord.apply_rollback` - T7 runtime assertion | `constrai/inverse_algebra.py` | 57-87 |
+| `ActionSpec.compute_inverse_effects` - T7 proof in docstring | `clampai/formal.py` | 319-394 |
+| `Effect.inverse` - algebraic inverse per operation | `clampai/formal.py` | 237-265 |
+| `SafetyKernel.rollback` | `clampai/formal.py` | 988-999 |
+| `BudgetController.refund` - budget component of rollback | `clampai/formal.py` | 540-552 |
+| `InverseAlgebra.compute_inverse_from_states` | `clampai/inverse_algebra.py` | 100-136 |
+| `RollbackRecord.apply_rollback` - T7 runtime assertion | `clampai/inverse_algebra.py` | 57-87 |
 
 ### Proof Strategy
 
@@ -336,11 +336,11 @@ Diff `state_before` and `state_after` directly. For each changed variable, emit 
 
 | Element | File | Lines |
 |---------|------|-------|
-| `SafetyKernel.register_emergency_action` | `constrai/formal.py` | 764-766 |
-| `SafetyKernel.evaluate` - Check 0 bypass for emergency | `constrai/formal.py` | 838-843 |
-| `SafetyKernel.evaluate` - Check 2 bypass for emergency | `constrai/formal.py` | 808-813 |
-| `SafetyKernel.__init__` - `emergency_actions` set | `constrai/formal.py` | 786-806 |
-| Module docstring - T8 canonical statement | `constrai/formal.py` | 36 |
+| `SafetyKernel.register_emergency_action` | `clampai/formal.py` | 764-766 |
+| `SafetyKernel.evaluate` - Check 0 bypass for emergency | `clampai/formal.py` | 838-843 |
+| `SafetyKernel.evaluate` - Check 2 bypass for emergency | `clampai/formal.py` | 808-813 |
+| `SafetyKernel.__init__` - `emergency_actions` set | `clampai/formal.py` | 786-806 |
+| Module docstring - T8 canonical statement | `clampai/formal.py` | 36 |
 
 ### Proof Strategy
 
@@ -396,11 +396,11 @@ The following are explicit out-of-scope items. No theorem makes claims about the
 
 1. **Spec-reality gap.** Proofs hold over the formal model (declared `Effect` objects). If a declared effect does not match what actually happens in the world, the model is correct but the world is not. Partially mitigated by `EnvironmentReconciler` (`hardening.py:413-469`).
 
-2. **LLM decision quality.** The theorems constrain what executes, not what the LLM proposes. A budget-compliant, invariant-satisfying action can still be the wrong action for the goal.
+2. **LLM decision quality.** The theorems clampain what executes, not what the LLM proposes. A budget-compliant, invariant-satisfying action can still be the wrong action for the goal.
 
 3. **Multi-process coordination.** All proofs assume a single `SafetyKernel` instance in a single process. Distributed multi-agent safety is an open research problem. See `docs/MULTI_AGENT_ARCHITECTURE.md`.
 
-4. **Python memory-level attacks.** An adversary with the ability to call `ctypes` or manipulate the garbage collector can bypass Python's attribute protection. ConstrAI does not provide memory-safety guarantees.
+4. **Python memory-level attacks.** An adversary with the ability to call `ctypes` or manipulate the garbage collector can bypass Python's attribute protection. ClampAI does not provide memory-safety guarantees.
 
 5. **Monitoring-mode invariants.** Only `enforcement="blocking"` invariants are covered by T3. Monitoring-mode invariants log violations but do not block execution.
 
@@ -443,7 +443,7 @@ This sprint targets **T1 (Budget Safety)** as the first machine-checked theorem,
 
 **Week 1: Setup and model**
 - [ ] Install Lean 4 and Mathlib4 (`elan` + `lake`).
-- [ ] Create `formal/ConstrAI/BudgetModel.lean`.
+- [ ] Create `formal/ClampAI/BudgetModel.lean`.
 - [ ] Define `BudgetState : Type` with `spent_i : Int` and `budget_i : Int` (scaled integers, matching `_SCALE = 1000` in `formal.py`).
 - [ ] State T1 as a `theorem` without proving it yet: `∀ (s : BudgetState), s.spent_i ≤ s.budget_i`.
 

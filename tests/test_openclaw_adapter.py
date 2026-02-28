@@ -1,4 +1,4 @@
-"""Tests for constrai.adapters.openclaw_adapter.
+"""Tests for clampai.adapters.openclaw_adapter.
 
 Covers every public class and method in the super-wrapper:
 
@@ -26,7 +26,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
-from constrai.adapters.openclaw_adapter import (
+from clampai.adapters.openclaw_adapter import (
     THINKING_LEVELS,
     AsyncOpenClawAdapter,
     GatewayHealth,
@@ -629,7 +629,7 @@ class TestOpenClawAdapterWithNewSession:
     def test_generates_session_id(self):
         a = OpenClawAdapter.with_new_session()
         assert a._session_id is not None
-        assert a._session_id.startswith("constrai-")
+        assert a._session_id.startswith("clampai-")
 
     def test_custom_prefix(self):
         a = OpenClawAdapter.with_new_session(prefix="myapp")
@@ -1023,7 +1023,7 @@ class TestAsyncOpenClawAdapterWithNewSession:
     def test_generates_session_id(self):
         a = AsyncOpenClawAdapter.with_new_session()
         assert a._session_id is not None
-        assert a._session_id.startswith("constrai-")
+        assert a._session_id.startswith("clampai-")
 
     def test_custom_prefix(self):
         a = AsyncOpenClawAdapter.with_new_session(prefix="taskbot")
@@ -1304,10 +1304,10 @@ class TestOpenClawSessionContextManager:
             assert adapter.session_id is not None
             assert adapter.session_id.startswith("test-")
 
-    def test_default_prefix_is_constrai(self):
+    def test_default_prefix_is_clampai(self):
         with openclaw_session() as adapter:
             assert adapter.session_id is not None
-            assert adapter.session_id.startswith("constrai-")
+            assert adapter.session_id.startswith("clampai-")
 
     def test_thinking_propagated(self):
         with openclaw_session(thinking="high") as adapter:
@@ -1346,11 +1346,11 @@ class TestAsyncOpenClawSessionContextManager:
 
         asyncio.run(_run())
 
-    def test_default_prefix_is_constrai(self):
+    def test_default_prefix_is_clampai(self):
         async def _run():
             async with async_openclaw_session() as adapter:
                 assert adapter.session_id is not None
-                assert adapter.session_id.startswith("constrai-")
+                assert adapter.session_id.startswith("clampai-")
 
         asyncio.run(_run())
 

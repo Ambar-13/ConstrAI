@@ -13,9 +13,9 @@ Run:
     python examples/04_orchestrator.py
 """
 
-from constrai import (
+from clampai import (
     ActionSpec,
-    ConstrAI_SYSTEM_PROMPT,
+    ClampAI_SYSTEM_PROMPT,
     Effect,
     Invariant,
     Orchestrator,
@@ -134,7 +134,7 @@ def build_data_pipeline_task() -> TaskDefinition:
             "action:generate_report:succeeds": (7.0, 3.0),
         },
 
-        system_prompt=ConstrAI_SYSTEM_PROMPT + """
+        system_prompt=ClampAI_SYSTEM_PROMPT + """
 DOMAIN CONTEXT:
 You are running a data pipeline. The correct order is:
   1. ingest_data

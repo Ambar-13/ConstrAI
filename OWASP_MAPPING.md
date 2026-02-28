@@ -1,10 +1,10 @@
-# ConstrAI — OWASP LLM Top 10 (2025) Compliance Mapping
+# ClampAI — OWASP LLM Top 10 (2025) Compliance Mapping
 
 This document maps each risk in the **OWASP Top 10 for Large Language Model
-Applications (2025)** to the specific ConstrAI theorems and components that
+Applications (2025)** to the specific ClampAI theorems and components that
 mitigate it, together with the residual risk and recommended configuration.
 
-The ConstrAI eight theorems are: **T1** (Budget Safety), **T2** (Bounded
+The ClampAI eight theorems are: **T1** (Budget Safety), **T2** (Bounded
 Termination), **T3** (Invariant Preservation), **T4** (Monotone Resource Consumption),
 **T5** (Atomic Execution), **T6** (Tamper-Evident Trace), **T7** (Exact
 Rollback), **T8** (Emergency Halt).
@@ -17,18 +17,18 @@ Rollback), **T8** (Emergency Halt).
 LLM into taking unintended actions (e.g., exfiltrating data, bypassing
 authorization, executing arbitrary commands).
 
-**ConstrAI mitigation**:
+**ClampAI mitigation**:
 
 | Component | How it helps |
 |---|---|
 | **T3 Invariants** | Block any action whose *projected next state* would violate a predicate — regardless of what the LLM claimed as justification. The kernel has no language model; it cannot be persuaded by text. |
-| **AttestationGate** (`constrai/hardening.py`) | Requires cryptographic attestation from designated attestors before high-risk actions execute. An injected instruction cannot produce a valid attestation. |
-| **ReferenceMonitor** (`constrai/reference_monitor.py`) | IFC (Information Flow Control) labels prevent data exfiltration paths from being approved even when the LLM believes the action is safe. |
+| **AttestationGate** (`clampai/hardening.py`) | Requires cryptographic attestation from designated attestors before high-risk actions execute. An injected instruction cannot produce a valid attestation. |
+| **ReferenceMonitor** (`clampai/reference_monitor.py`) | IFC (Information Flow Control) labels prevent data exfiltration paths from being approved even when the LLM believes the action is safe. |
 | **T6 Trace** | Every approved action is logged with a hash-chained fingerprint; forensic analysis can identify the injection point after the fact. |
 
 **Recommended invariants**:
 ```python
-from constrai import no_sensitive_substring_invariant, human_approval_gate_invariant
+from clampai import no_sensitive_substring_invariant, human_approval_gate_invariant
 
 kernel = SafetyKernel(
     budget=100.0,
@@ -41,7 +41,7 @@ kernel = SafetyKernel(
 )
 ```
 
-**Residual risk**: ConstrAI cannot prevent the LLM from *reasoning* about
+**Residual risk**: ClampAI cannot prevent the LLM from *reasoning* about
 injected content. It only blocks the resulting *action* if it violates a
 declared invariant. Invariants must cover all sensitive action classes.
 
@@ -52,7 +52,7 @@ declared invariant. Invariants must cover all sensitive action classes.
 **Risk**: The LLM inadvertently reveals PII, credentials, proprietary data,
 or system internals in its responses or tool outputs.
 
-**ConstrAI mitigation**:
+**ClampAI mitigation**:
 
 | Component | How it helps |
 |---|---|
@@ -62,8 +62,8 @@ or system internals in its responses or tool outputs.
 
 **Recommended configuration**:
 ```python
-from constrai import no_sensitive_substring_invariant
-from constrai.reference_monitor import SecurityLevel, DataLabel, LabelledData
+from clampai import no_sensitive_substring_invariant
+from clampai.reference_monitor import SecurityLevel, DataLabel, LabelledData
 
 # Label sensitive data at ingestion time
 pii_record = LabelledData(
@@ -91,7 +91,7 @@ for defense in depth.
 **Risk**: Poisoned models, malicious plugins, or compromised training data
 introduce backdoors or unsafe behaviors.
 
-**ConstrAI mitigation**:
+**ClampAI mitigation**:
 
 | Component | How it helps |
 |---|---|
@@ -99,7 +99,7 @@ introduce backdoors or unsafe behaviors.
 | **T3 Invariants** | The safety predicate layer is independent of the model weights. Even a fully compromised model cannot override a blocking invariant. |
 | **T6 Hash-chained Trace** | Provides a tamper-evident audit log. Anomalous action sequences (e.g., sudden shifts toward sensitive operations) are detectable via the trace. |
 
-**Residual risk**: ConstrAI cannot verify model provenance or detect
+**Residual risk**: ClampAI cannot verify model provenance or detect
 weight-level backdoors. Supply-chain mitigations must include model signing
 (e.g., MLflow model registry with hash verification) at the ML-ops layer.
 
@@ -110,7 +110,7 @@ weight-level backdoors. Supply-chain mitigations must include model signing
 **Risk**: Training or fine-tuning data is manipulated to alter model behavior,
 inject biases, or create exploitable patterns at inference time.
 
-**ConstrAI mitigation**:
+**ClampAI mitigation**:
 
 | Component | How it helps |
 |---|---|
@@ -119,7 +119,7 @@ inject biases, or create exploitable patterns at inference time.
 | **CausalGraph** | Models dependencies between actions. Actions inconsistent with the declared causal graph are rejected before reaching the kernel. |
 
 **Residual risk**: Subtle poisoning that produces plausible-looking actions
-within invariant bounds cannot be detected by ConstrAI alone. Runtime monitoring
+within invariant bounds cannot be detected by ClampAI alone. Runtime monitoring
 (T6 trace anomaly detection) supplements but does not replace training-time
 integrity checks.
 
@@ -130,7 +130,7 @@ integrity checks.
 **Risk**: LLM outputs are passed unsanitized to downstream systems (SQL
 interpreters, OS shells, JavaScript contexts), enabling injection attacks.
 
-**ConstrAI mitigation**:
+**ClampAI mitigation**:
 
 | Component | How it helps |
 |---|---|
@@ -140,7 +140,7 @@ interpreters, OS shells, JavaScript contexts), enabling injection attacks.
 
 **Recommended pattern**:
 ```python
-from constrai import no_regex_match_invariant
+from clampai import no_regex_match_invariant
 
 kernel = SafetyKernel(
     budget=100.0,
@@ -165,7 +165,7 @@ require additional sandboxing at the execution layer.
 autonomy than necessary for the task, amplifying the blast radius of
 any error or compromise.
 
-**ConstrAI mitigation — primary coverage**:
+**ClampAI mitigation — primary coverage**:
 
 | Component | How it helps |
 |---|---|
@@ -173,14 +173,14 @@ any error or compromise.
 | **T2 Bounded Termination** | The agent halts in ≤ ⌊budget / min_action_cost⌋ steps — a provable upper bound on autonomy. |
 | **T3 Invariants** | Capability restrictions encoded as invariants: `no_delete_invariant`, `read_only_keys_invariant`, `allowed_values_invariant`, etc. The agent cannot exceed declared permissions. |
 | **T8 Emergency Halt** | Emergency actions bypass cost checks and immediately terminate the session — a guaranteed exit ramp even when budget is exhausted. |
-| **`@constrai_safe` decorator** | Minimum viable constraint: wraps any function with budget + invariants in one decorator. Suitable for capability-bounded tool calls. |
+| **`@clampai_safe` decorator** | Minimum viable clampaint: wraps any function with budget + invariants in one decorator. Suitable for capability-bounded tool calls. |
 
-**This is ConstrAI's core strength.** The framework was designed specifically
+**This is ClampAI's core strength.** The framework was designed specifically
 to address LLM06 through provable bounds rather than heuristic filtering.
 
 ```python
 # Minimal LLM06 mitigation — wrap every agent tool
-@constrai_safe(
+@clampai_safe(
     budget=50.0,           # T1: $50 total, then halts
     cost_per_call=5.0,     # T2: max 10 calls
     invariants=[
@@ -202,19 +202,19 @@ are too permissive (e.g., `lambda s: True`) provide no protection.
 **Risk**: The LLM's system prompt (containing instructions, credentials, or
 proprietary context) is extracted by adversarial users.
 
-**ConstrAI mitigation**:
+**ClampAI mitigation**:
 
 | Component | How it helps |
 |---|---|
 | **T3 Invariants** | Block any action that would write system prompt content to user-visible output fields. |
 | **IFC Labels** | Label the system prompt as CONFIDENTIAL; IFC prevents it from flowing into PUBLIC-labelled response fields. |
 
-**Note**: ConstrAI operates at the action/state level, not at the
+**Note**: ClampAI operates at the action/state level, not at the
 token/prompt level. Mitigating prompt leakage requires invariants that
 explicitly model the system prompt as a protected state variable.
 
 **Residual risk**: If the system prompt is not modelled as a state variable
-(which is the common case for most deployments), ConstrAI provides no
+(which is the common case for most deployments), ClampAI provides no
 protection. This risk requires prompt-level defenses (separate system/user
 context isolation, output classifiers).
 
@@ -225,14 +225,14 @@ context isolation, output classifiers).
 **Risk**: Vector store poisoning, adversarial embeddings, or retrieval
 manipulation cause the LLM to retrieve and act on malicious content.
 
-**ConstrAI mitigation**:
+**ClampAI mitigation**:
 
 | Component | How it helps |
 |---|---|
 | **T3 Invariants** | Retrieved content passes through invariant checks before being acted upon. A retrieved malicious instruction that produces a dangerous proposed action is blocked at the kernel. |
 | **Bayesian beliefs** (`BeliefState`) | Bayesian priors on action success rates flag anomalous action proposals that may result from retrieval poisoning. Part of the Reasoning Engine, not a formal theorem. |
 
-**Residual risk**: ConstrAI does not inspect vector store contents or
+**Residual risk**: ClampAI does not inspect vector store contents or
 embedding distances. Poisoned retrievals that produce plausible-looking
 actions within invariant bounds pass through. Mitigate at the retrieval
 layer with content hashing, source attribution, and anomaly scoring.
@@ -244,16 +244,16 @@ layer with content hashing, source attribution, and anomaly scoring.
 **Risk**: The LLM generates confidently stated but factually incorrect
 content that is subsequently acted upon.
 
-**ConstrAI mitigation**:
+**ClampAI mitigation**:
 
 | Component | How it helps |
 |---|---|
 | **Bayesian beliefs** (`BeliefState`) | Maintains calibrated uncertainty estimates per action. Actions proposed with low confidence are flagged before execution. Part of the Reasoning Engine, not a formal theorem. |
-| **T3 Invariants** | Domain-specific invariants can enforce factual constraints: `value_range_invariant` ensures numeric outputs (e.g., dosages, financial figures) remain in plausible ranges. |
+| **T3 Invariants** | Domain-specific invariants can enforce factual clampaints: `value_range_invariant` ensures numeric outputs (e.g., dosages, financial figures) remain in plausible ranges. |
 | **Human approval gates** | `human_approval_gate_invariant` requires explicit human sign-off before high-stakes actions derived from LLM-generated facts are executed. |
 
-**Residual risk**: ConstrAI cannot verify factual accuracy as a general
-capability. Mitigations are limited to structural constraints on outputs.
+**Residual risk**: ClampAI cannot verify factual accuracy as a general
+capability. Mitigations are limited to structural clampaints on outputs.
 Factual verification requires retrieval-augmented generation with cited
 sources and human review workflows.
 
@@ -265,7 +265,7 @@ sources and human review workflows.
 to generate excessively long outputs, make unlimited API calls, or consume
 disproportionate compute.
 
-**ConstrAI mitigation — strong coverage**:
+**ClampAI mitigation — strong coverage**:
 
 | Component | How it helps |
 |---|---|
@@ -276,7 +276,7 @@ disproportionate compute.
 | **T8 Emergency Halt** | If a runaway agent exceeds its step budget, emergency actions guarantee a clean exit. |
 
 ```python
-from constrai import rate_limit_invariant, resource_ceiling_invariant
+from clampai import rate_limit_invariant, resource_ceiling_invariant
 
 kernel = SafetyKernel(
     budget=10.0,           # T1: hard cost cap
@@ -296,7 +296,7 @@ effects, which is the integrator's responsibility.
 
 ## Coverage Summary
 
-| OWASP Risk | ConstrAI Coverage | Strength |
+| OWASP Risk | ClampAI Coverage | Strength |
 |---|---|---|
 | LLM01 Prompt Injection | T3, AttestationGate, IFC, T6 | Partial (invariants must be declared) |
 | LLM02 Sensitive Disclosure | IFC, T3, SaliencyEngine | Partial (pattern-based) |
@@ -306,10 +306,10 @@ effects, which is the integrator's responsibility.
 | LLM06 Excessive Agency | T1, T2, T3, T8 | **Strong — primary design goal** |
 | LLM07 System Prompt Leakage | T3, IFC | Weak (requires explicit modelling) |
 | LLM08 Vector Weaknesses | T3, Bayesian beliefs | Partial (upstream retrieval not covered) |
-| LLM09 Misinformation | Bayesian beliefs, T3, human gates | Partial (structural constraints only) |
+| LLM09 Misinformation | Bayesian beliefs, T3, human gates | Partial (structural clampaints only) |
 | LLM10 Unbounded Consumption | T1, T2, rate_limit, ceiling | **Strong — full provable bounds** |
 
-ConstrAI is **strongest** on LLM06 (Excessive Agency) and LLM10 (Unbounded
+ClampAI is **strongest** on LLM06 (Excessive Agency) and LLM10 (Unbounded
 Consumption) — the two risks most amenable to formal, provable bounds.
 
 ---

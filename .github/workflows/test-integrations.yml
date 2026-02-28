@@ -1,4 +1,4 @@
-# Integration tests for ConstrAI components and LLM adapters.
+# Integration tests for ClampAI components and LLM adapters.
 #
 # Runs:
 #   - On push/PR touching adapter code or integration tests
@@ -12,13 +12,13 @@ on:
 
   push:
     paths:
-      - "constrai/adapters/**"
+      - "clampai/adapters/**"
       - "tests/test_integration*.py"
       - ".github/workflows/test-integrations.yml"
 
   pull_request:
     paths:
-      - "constrai/adapters/**"
+      - "clampai/adapters/**"
       - "tests/test_integration*.py"
 
   schedule:

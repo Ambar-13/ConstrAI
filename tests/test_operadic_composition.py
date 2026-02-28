@@ -1,4 +1,4 @@
-"""Tests for constrai.operadic_composition — proof-based task composition.
+"""Tests for clampai.operadic_composition — proof-based task composition.
 
 Covers InterfaceSignature, VerificationCertificate, SuperTask, and TaskComposer
 including composition logic, certificate propagation, and the operadic transfer
@@ -10,8 +10,8 @@ from typing import Tuple
 
 import pytest
 
-from constrai.formal import ActionSpec, Effect, GuaranteeLevel, Invariant, State
-from constrai.operadic_composition import (
+from clampai.formal import ActionSpec, Effect, GuaranteeLevel, Invariant, State
+from clampai.operadic_composition import (
     CompositionType,
     InterfaceSignature,
     SuperTask,

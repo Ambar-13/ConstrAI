@@ -1,12 +1,12 @@
 """
-Tests for constrai.orchestrator coverage:
+Tests for clampai.orchestrator coverage:
   Outcome, ProgressMonitor, ExecutionResult, Orchestrator termination scenarios.
 """
 from __future__ import annotations
 
 import pytest
 
-from constrai import (
+from clampai import (
     ActionSpec,
     Effect,
     ExecutionResult,

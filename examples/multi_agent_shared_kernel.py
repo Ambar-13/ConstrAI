@@ -6,7 +6,7 @@ SafetyKernel. All T1–T8 theorems hold across threads because
 ``evaluate_and_execute_atomic()`` serialises check + charge + commit under
 one ``threading.Lock``. This is the supported multi-agent pattern for v0.x.
 
-For the constraints around multi-process coordination, see
+For the clampaints around multi-process coordination, see
 docs/MULTI_AGENT_ARCHITECTURE.md.
 """
 
@@ -14,7 +14,7 @@ import threading
 import time
 from typing import List, Tuple
 
-from constrai import (
+from clampai import (
     ActionSpec,
     Effect,
     Invariant,

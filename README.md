@@ -1,21 +1,77 @@
-# ConstrAI
+# ClampAI
 
-[![PyPI version](https://badge.fury.io/py/constrai.svg)](https://pypi.org/project/constrai/)
-[![Python Versions](https://img.shields.io/pypi/pyversions/constrai.svg)](https://pypi.org/project/constrai/)
+[![PyPI version](https://badge.fury.io/py/clampai.svg)](https://pypi.org/project/clampai/)
+[![Python Versions](https://img.shields.io/pypi/pyversions/clampai.svg)](https://pypi.org/project/clampai/)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
-[![Tests](https://github.com/Ambar-13/ConstrAI/actions/workflows/test.yml/badge.svg)](https://github.com/Ambar-13/ConstrAI/actions/workflows/test.yml)
+[![Tests](https://github.com/Ambar-13/ClampAI/actions/workflows/test.yml/badge.svg)](https://github.com/Ambar-13/ClampAI/actions/workflows/test.yml)
 
-A safety framework for AI agents. Sits between your LLM and the real world. Before any action runs, a deterministic kernel checks that it can be afforded, that it does not violate any declared invariant, and that the audit log is intact. If the check fails, the action is rejected — state and budget stay exactly as they were.
+Formal safety for AI agents — enforced at execution, not in the prompt.
 
+---
+
+## Install
+
+```bash
+pip install clampai
 ```
-LLM proposes action
-      ↓
-  Safety Kernel
-      ↓
-Execute or Reject
+
+Zero runtime dependencies. Python 3.9+.
+
+---
+
+## Quickstart
+
+The simplest case: one line gives you provable budget enforcement.
+
+```python
+from clampai import safe
+
+@safe(budget=10.0)
+def call_api(endpoint: str) -> dict:
+    ...
+
+call_api("/search")   # $1.00 charged
+call_api("/search")   # $1.00 charged
+# ... after 10 calls:
+# SafetyViolation: budget exhausted ($10.00 spent of $10.00)
 ```
 
-**Python 3.9+. Zero runtime dependencies.**
+Add invariants in the same decorator:
+
+```python
+from clampai.invariants import rate_limit_invariant, pii_guard_invariant
+
+@safe(
+    budget=50.0,
+    cost_per_call=2.0,
+    invariants=[
+        rate_limit_invariant("emails_sent", max_count=100),
+        pii_guard_invariant("output"),
+    ],
+    state_fn=lambda: {"emails_sent": db.get_count(), "output": ""},
+)
+def send_email(recipient: str, body: str) -> None:
+    ...
+```
+
+For multi-step agents, see [Building an agent with Orchestrator](#building-an-agent-with-orchestrator).
+
+---
+
+## What you get
+
+- **Budget enforcement (T1):** Total spend never exceeds what you set. Enforced by a locked counter — not a trust-based check.
+- **Invariant preservation (T3):** Every rule you declare holds on every state the kernel allows to exist. The bad state never becomes real.
+- **Atomicity (T5):** Rejected actions leave state and budget exactly as they were before the attempt.
+- **Audit trail (T6):** SHA-256 chained log of every decision — tamper-evident by construction.
+- **Exact rollback (T7):** For reversible actions, `rollback(execute(s, a)) == s` exactly.
+- **Bounded termination (T2):** Given a finite budget and a minimum action cost, the loop cannot run forever.
+
+**Battle-tested:** The chaos fuzzer passes 45/45 adversarial attack scenarios. Red-team evaluation across 39 attack vectors spanning 9 threat categories: **89.7% recall, zero false positives**, at sub-millisecond latency (~45,600 checks/second). The 4 vectors that evade classification do so before an `ActionSpec` is constructed — the kernel itself has no known bypass.
+
+**NeMo Guardrails checks what the LLM says. ClampAI checks what the agent does.**
+
+ClampAI is complementary to text-layer guardrails, not a replacement. A production agent needs both: text-layer safety (NeMo, LLM Guard) catches prompt injection and toxic outputs; ClampAI catches budget overruns, invariant violations, and state corruption at the execution layer.
 
 ---
 
@@ -24,13 +80,13 @@ Execute or Reject
 1. [The problem this solves](#the-problem-this-solves)
 2. [How it works — the mental model](#how-it-works--the-mental-model)
 3. [Installation](#installation)
-4. [Your first safety check](#your-first-safety-check)
-5. [Core concepts](#core-concepts)
-6. [The @safe decorator](#the-safe-decorator)
-7. [Building an agent with Orchestrator](#building-an-agent-with-orchestrator)
-8. [Pre-built invariants](#pre-built-invariants)
-9. [Testing your safety rules](#testing-your-safety-rules)
-10. [LLM adapters](#llm-adapters)
+4. [Core concepts](#core-concepts)
+5. [The @safe decorator](#the-safe-decorator)
+6. [Building an agent with Orchestrator](#building-an-agent-with-orchestrator)
+7. [Pre-built invariants](#pre-built-invariants)
+8. [Testing your safety rules](#testing-your-safety-rules)
+9. [LLM adapters](#llm-adapters)
+10. [Framework integrations](#framework-integrations) — LangGraph, FastAPI, LangChain, CrewAI, AutoGen, HTTP Sidecar
 11. [Formal guarantees in plain English](#formal-guarantees-in-plain-english)
 12. [Architecture](#architecture)
 13. [Advanced features](#advanced-features)
@@ -52,7 +108,7 @@ When you give an LLM the ability to take real actions — send emails, write fil
 2. **The LLM violates a rule you declared.** "Never delete records", "never send more than 20 emails per hour", "stop if the error rate exceeds 5%" — these rules need to be enforced, not just stated in a prompt.
 3. **Something crashes mid-run and leaves state inconsistent.** An action was half-applied and you don't know what happened.
 
-Prompt engineering ("please don't do bad things") is not enforcement — the model can hallucinate past it. Post-hoc filtering fires after the damage. ConstrAI enforces at the **execution layer**: the LLM produces a decision; the kernel decides whether it executes. The two are separate, and neither can override the other.
+Prompt engineering ("please don't do bad things") is not enforcement — the model can hallucinate past it. Post-hoc filtering fires after the damage. ClampAI enforces at the **execution layer**: the LLM produces a decision; the kernel decides whether it executes. The two are separate, and neither can override the other.
 
 ---
 
@@ -77,7 +133,7 @@ A key detail: the kernel does not execute the action to check it. It **simulates
 ## Installation
 
 ```bash
-pip install constrai
+pip install clampai
 ```
 
 The core package has zero external dependencies — it runs on the Python standard library alone.
@@ -85,54 +141,16 @@ The core package has zero external dependencies — it runs on the Python standa
 Optional extras:
 
 ```bash
-pip install constrai[anthropic]     # Anthropic Claude adapter
-pip install constrai[openai]        # OpenAI and Azure OpenAI adapter
-pip install constrai[langchain]     # LangChain tool adapter
-pip install constrai[mcp]           # Model Context Protocol server
-pip install constrai[prometheus]    # Prometheus metrics export
-pip install constrai[opentelemetry] # OpenTelemetry metrics export
-pip install constrai[dev]           # pytest, mypy, ruff
+pip install clampai[anthropic]     # Anthropic Claude adapter
+pip install clampai[openai]        # OpenAI and Azure OpenAI adapter
+pip install clampai[langchain]     # LangChain tool adapter
+pip install clampai[langgraph]     # LangGraph node and edge safety
+pip install clampai[fastapi]       # FastAPI/Starlette request middleware
+pip install clampai[mcp]           # Model Context Protocol server
+pip install clampai[prometheus]    # Prometheus metrics export
+pip install clampai[opentelemetry] # OpenTelemetry metrics export
+pip install clampai[dev]           # pytest, mypy, ruff
 ```
-
----
-
-## Your first safety check
-
-The simplest possible example: one kernel, one action, one budget check.
-
-```python
-from constrai import SafetyKernel, State, ActionSpec, Effect
-
-kernel = SafetyKernel(budget=10.0, invariants=[])
-
-send_action = ActionSpec(
-    id="send_email",
-    name="Send Email",
-    description="Send one email to the recipient",
-    effects=(Effect("sent", "set", 1),),
-    cost=3.0,
-)
-
-state = State({"sent": 0})
-verdict = kernel.evaluate(state, send_action)
-
-if verdict.approved:
-    new_state, _entry = kernel.execute(state, send_action)
-    print(f"Sent. Budget remaining: {kernel.budget.remaining}")  # 7.0
-else:
-    reasons = "; ".join(verdict.rejection_reasons)
-    print(f"Blocked: {reasons}")
-```
-
-Run the same action three more times:
-
-```
-Budget: 7.0 → approved. Remaining: 4.0
-Budget: 4.0 → approved. Remaining: 1.0
-Budget: 1.0, action costs 3.0 → BLOCKED: "Cannot afford $3.00"
-```
-
-The kernel enforces the budget unconditionally — no way to override it from user input or LLM output.
 
 ---
 
@@ -143,7 +161,7 @@ The kernel enforces the budget unconditionally — no way to override it from us
 `State` is an immutable snapshot of your agent's world — a frozen dictionary.
 
 ```python
-from constrai import State
+from clampai import State
 
 s = State({"counter": 0, "errors": 0, "status": "pending"})
 s.get("counter")       # 0
@@ -157,14 +175,14 @@ s.get("missing", 42)   # 42 — safe default, key absent
 An `Effect` describes one atomic change to state: `(key, operation, value)`.
 
 ```python
-from constrai import Effect
+from clampai import Effect
 
-Effect("counter", "increment", 1)   # counter += 1
+Effect("counter", "increment", 1)      # counter += 1
 Effect("status",  "set",       "done") # status = "done"
 Effect("items",   "append",    "x")    # items.append("x")
 Effect("items",   "remove",    "x")    # items.remove("x")
 Effect("cost",    "decrement", 5)      # cost -= 5
-Effect("price",   "multiply",  0.9)   # price *= 0.9
+Effect("price",   "multiply",  0.9)    # price *= 0.9
 Effect("tmp_key", "delete",    None)   # removes the key from state
 ```
 
@@ -192,7 +210,7 @@ Data can be simulated, diffed, inspected, and inverted. Code cannot.
 An `ActionSpec` bundles effects with metadata used for planning and reasoning.
 
 ```python
-from constrai import ActionSpec, Effect
+from clampai import ActionSpec, Effect
 
 action = ActionSpec(
     id="process_batch",         # unique identifier
@@ -212,7 +230,7 @@ action = ActionSpec(
 An `Invariant` is a rule that must hold on every state the kernel allows to exist. Write it as a function from `State` to `bool`.
 
 ```python
-from constrai import Invariant
+from clampai import Invariant
 
 # Hard stop: if this returns False, the action is rejected.
 no_over_send = Invariant(
@@ -243,7 +261,7 @@ low_budget_warning = Invariant(
 The kernel is the core enforcement object. Everything flows through it.
 
 ```python
-from constrai import SafetyKernel, Invariant
+from clampai import SafetyKernel, Invariant
 
 kernel = SafetyKernel(
     budget=50.0,
@@ -271,7 +289,7 @@ Key methods:
 For wrapping a single function — rate-limiting an API call, enforcing a spend ceiling — the `@safe` decorator is the simplest path.
 
 ```python
-from constrai import safe, SafetyViolation
+from clampai import safe, SafetyViolation
 
 # Charge 1.0 against a budget of 10 on each call.
 @safe(budget=10.0)
@@ -284,7 +302,7 @@ def call_external_api(endpoint: str) -> dict:
 With invariants and dynamic state (reading live counters from your database or state store):
 
 ```python
-from constrai.invariants import rate_limit_invariant, value_range_invariant
+from clampai.invariants import rate_limit_invariant, value_range_invariant
 
 @safe(
     budget=50.0,
@@ -325,7 +343,7 @@ For multi-step tasks where an LLM chooses what to do at each step, use `TaskDefi
 ### Minimal example
 
 ```python
-from constrai import (
+from clampai import (
     TaskDefinition, State, ActionSpec, Effect, Invariant, Orchestrator
 )
 
@@ -364,7 +382,7 @@ No API key needed — the built-in `MockLLMAdapter` drives execution for develop
 
 ```python
 import anthropic
-from constrai.adapters import AnthropicAdapter
+from clampai.adapters import AnthropicAdapter
 
 client = anthropic.Anthropic()  # reads ANTHROPIC_API_KEY from environment
 engine = Orchestrator(task, llm=AnthropicAdapter(client))
@@ -419,7 +437,7 @@ If the LLM call fails for any reason (timeout, parse error, returns a non-existe
 
 ## Pre-built invariants
 
-`constrai/invariants.py` ships 25 ready-to-use factory functions. Import from `constrai.invariants` or directly from `constrai`.
+`clampai/invariants.py` ships 25 ready-to-use factory functions. Import from `clampai.invariants` or directly from `clampai`.
 
 ### Complete reference
 
@@ -454,7 +472,7 @@ If the LLM call fails for any reason (timeout, parse error, returns a non-existe
 ### Examples
 
 ```python
-from constrai.invariants import (
+from clampai.invariants import (
     rate_limit_invariant,
     resource_ceiling_invariant,
     value_range_invariant,
@@ -501,7 +519,7 @@ json_schema_invariant("payload", {"amount": float, "currency": str})
 ### Writing your own
 
 ```python
-from constrai import Invariant
+from clampai import Invariant
 
 my_rule = Invariant(
     name="no_large_transfers",
@@ -517,12 +535,12 @@ my_rule = Invariant(
 
 ## Testing your safety rules
 
-`constrai.testing` provides utilities for writing unit tests against your safety configuration without spinning up a full Orchestrator.
+`clampai.testing` provides utilities for writing unit tests against your safety configuration without spinning up a full Orchestrator.
 
 ### `make_state` and `make_action`
 
 ```python
-from constrai import make_state, make_action
+from clampai import make_state, make_action
 
 state  = make_state(counter=0, status="pending")
 action = make_action("increment", cost=1.0, counter=5)  # sets counter=5 in state
@@ -533,8 +551,8 @@ action = make_action("increment", cost=1.0, counter=5)  # sets counter=5 in stat
 A context manager that creates a `SafetyKernel` from `budget` and `invariants` and exposes assertion helpers for testing.
 
 ```python
-from constrai import SafetyHarness, make_state, make_action
-from constrai.invariants import value_range_invariant
+from clampai import SafetyHarness, make_state, make_action
+from clampai.invariants import value_range_invariant
 
 def test_spend_ceiling():
     inv = value_range_invariant("spend_usd", 0, 100)
@@ -575,18 +593,18 @@ All adapters implement the same interface: `complete(prompt, ...) -> str` and `a
 
 | Adapter class | Backend | Install |
 |---------------|---------|---------|
-| `AnthropicAdapter` / `AsyncAnthropicAdapter` | Anthropic Claude | `pip install constrai[anthropic]` |
-| `OpenAIAdapter` / `AsyncOpenAIAdapter` | OpenAI / Azure OpenAI | `pip install constrai[openai]` |
+| `AnthropicAdapter` / `AsyncAnthropicAdapter` | Anthropic Claude | `pip install clampai[anthropic]` |
+| `OpenAIAdapter` / `AsyncOpenAIAdapter` | OpenAI / Azure OpenAI | `pip install clampai[openai]` |
 | `OpenClawAdapter` / `AsyncOpenClawAdapter` | OpenClaw local CLI | `npm install -g openclaw@latest` |
-| `ConstrAISafeTool` | LangChain `BaseTool` wrapper | `pip install constrai[langchain]` |
-| `SafeMCPServer` | MCP tool server with shared budget | `pip install constrai[mcp]` |
+| `ClampAISafeTool` | LangChain `BaseTool` wrapper | `pip install clampai[langchain]` |
+| `SafeMCPServer` | MCP tool server with shared budget | `pip install clampai[mcp]` |
 | `MockLLMAdapter` | Deterministic mock (built-in) | — |
 
 ### Anthropic Claude
 
 ```python
 import anthropic
-from constrai.adapters import AnthropicAdapter
+from clampai.adapters import AnthropicAdapter
 
 client = anthropic.Anthropic()
 engine = Orchestrator(task, llm=AnthropicAdapter(client, model="claude-opus-4-6"))
@@ -596,7 +614,7 @@ engine = Orchestrator(task, llm=AnthropicAdapter(client, model="claude-opus-4-6"
 
 ```python
 import openai
-from constrai.adapters import OpenAIAdapter
+from clampai.adapters import OpenAIAdapter
 
 client = openai.OpenAI()
 engine = Orchestrator(task, llm=OpenAIAdapter(client, model="gpt-4o"))
@@ -604,7 +622,7 @@ engine = Orchestrator(task, llm=OpenAIAdapter(client, model="gpt-4o"))
 
 ### OpenClaw
 
-[OpenClaw](https://github.com/openclaw/openclaw) is a local-first AI assistant runtime. ConstrAI wraps it with the same budget and invariant enforcement applied to cloud LLMs.
+[OpenClaw](https://github.com/openclaw/openclaw) is a local-first AI assistant runtime. ClampAI wraps it with the same budget and invariant enforcement applied to cloud LLMs.
 
 Prerequisites:
 ```bash
@@ -613,8 +631,8 @@ openclaw gateway   # keeps the WebSocket control plane running
 ```
 
 ```python
-from constrai.adapters import AsyncOpenClawAdapter
-from constrai.invariants import pii_guard_invariant
+from clampai.adapters import AsyncOpenClawAdapter
+from clampai.invariants import pii_guard_invariant
 
 adapter = AsyncOpenClawAdapter(thinking="medium")
 task = TaskDefinition(
@@ -630,13 +648,35 @@ engine = Orchestrator(task, llm=adapter)
 
 ### LangChain
 
-`ConstrAISafeTool` wraps a ConstrAI `Orchestrator` as a standard LangChain `BaseTool`. Every `_run()` call runs the orchestrator's full goal-directed loop with its safety kernel enforced throughout.
+**`ClampAICallbackHandler`** — wrap any existing LangChain agent with budget and invariant enforcement in two lines. No changes to the agent required.
 
 ```python
-from constrai.adapters import ConstrAISafeTool
-from constrai import Orchestrator
+from clampai.adapters import ClampAICallbackHandler
+from clampai.invariants import pii_guard_invariant, rate_limit_invariant
 
-tool = ConstrAISafeTool(
+handler = ClampAICallbackHandler(
+    budget=50.0,
+    invariants=[
+        rate_limit_invariant("tool_calls", max_count=20),
+        pii_guard_invariant("tool_input"),
+    ],
+)
+
+# Works with any LangChain agent unchanged:
+result = agent.invoke({"input": "..."}, config={"callbacks": [handler]})
+
+# Inspect after:
+print(f"Budget remaining: {handler.budget_remaining:.1f}")
+print(f"Actions blocked:  {handler.actions_blocked}")
+```
+
+**`ClampAISafeTool`** wraps a ClampAI `Orchestrator` as a standard LangChain `BaseTool`. Every `_run()` call runs the orchestrator's full goal-directed loop with its safety kernel enforced throughout.
+
+```python
+from clampai.adapters import ClampAISafeTool
+from clampai import Orchestrator
+
+tool = ClampAISafeTool(
     orchestrator=Orchestrator(task),
     name="email_agent",
     description="Manages an email inbox with safety guarantees.",
@@ -655,7 +695,7 @@ langchain-core==0.3.40
 For multi-model pipelines using the Model Context Protocol:
 
 ```python
-from constrai.adapters import SafeMCPServer
+from clampai.adapters import SafeMCPServer
 
 server = SafeMCPServer("my-agent", budget=100.0)
 
@@ -666,6 +706,194 @@ def search(query: str) -> str: ...
 def write_file(path: str, content: str) -> str: ...
 
 server.run()   # stdio MCP server; all tools share one SafetyKernel
+```
+
+---
+
+## Framework integrations
+
+### LangGraph
+
+`pip install clampai[langgraph]`
+
+Wrap any LangGraph node with budget and invariant enforcement using the `@clampai_node` decorator or `SafetyNode` class. Blocked nodes raise `ClampAIBudgetError` or `ClampAIInvariantError`, which your graph can catch and route to an error handler.
+
+```python
+from clampai.adapters import clampai_node, budget_guard, invariant_guard
+from clampai.invariants import rate_limit_invariant, value_range_invariant
+from langgraph.graph import StateGraph, END
+
+# Wrap a node — safety is enforced before the function body runs
+@clampai_node(budget=50.0, cost_per_step=2.0,
+               invariants=[rate_limit_invariant("api_calls", max_count=20)])
+def call_api_node(state: dict) -> dict:
+    # Only runs if budget remains and all invariants hold
+    result = my_api.call(state["query"])
+    return {"result": result, "api_calls": state.get("api_calls", 0) + 1}
+
+# Standalone budget gate node (no wrapped function — pure enforcement)
+graph = StateGraph(dict)
+graph.add_node("call_api", call_api_node)
+graph.add_node("budget_gate", budget_guard(budget=50.0, cost_per_step=1.0))
+graph.add_node("error_handler", lambda s: {"error": "safety limit reached"})
+```
+
+Use `invariant_guard` to add a safety checkpoint that checks invariants without charging budget:
+
+```python
+graph.add_node("data_guard", invariant_guard([
+    rate_limit_invariant("api_calls", max_count=20),
+    value_range_invariant("confidence", 0.0, 1.0),
+]))
+```
+
+See [`examples/06_langgraph_agent.py`](examples/06_langgraph_agent.py) for a complete runnable example demonstrating all four integration patterns.
+
+### FastAPI / Starlette
+
+`pip install clampai[fastapi]`
+
+`ClampAIMiddleware` enforces a per-application budget across all HTTP requests. Requests that exhaust the budget receive HTTP 429.
+
+```python
+from fastapi import FastAPI
+from clampai.adapters import ClampAIMiddleware
+from clampai.invariants import rate_limit_invariant
+
+app = FastAPI()
+
+app.add_middleware(
+    ClampAIMiddleware,
+    budget=10_000.0,
+    cost_per_request=1.0,
+    invariants=[
+        rate_limit_invariant("requests_served", max_count=5_000),
+    ],
+)
+
+@app.get("/search")
+def search(q: str) -> dict:
+    return {"results": [...]}
+# Each request costs 1.0. After 10,000 budget units: 429.
+```
+
+Inspect budget and reset by traversing the Starlette middleware stack:
+
+```python
+def _get_clampai_mw(app):
+    stack = app.middleware_stack
+    while stack is not None:
+        if isinstance(stack, ClampAIMiddleware):
+            return stack
+        stack = getattr(stack, "app", None)
+
+mw = _get_clampai_mw(app)
+print(mw.budget_remaining)
+mw.reset()
+```
+
+See [`examples/07_fastapi_middleware.py`](examples/07_fastapi_middleware.py) for a complete standalone demo (no uvicorn required).
+
+### CrewAI
+
+`pip install crewai`
+
+**`ClampAISafeCrewTool`** wraps any callable as a CrewAI tool with budget and invariant enforcement. **`ClampAICrewCallback`** enforces safety at each agent step and task completion.
+
+```python
+from clampai.adapters import ClampAISafeCrewTool, ClampAICrewCallback, safe_crew_tool
+from clampai.invariants import rate_limit_invariant, pii_guard_invariant
+
+# Decorator form:
+@safe_crew_tool(budget=50.0, cost=2.0, name="web_search",
+                description="Search the web",
+                invariants=[pii_guard_invariant("query")])
+def web_search(query: str) -> str:
+    return search_api(query)
+
+# Callback form (enforces per-step and per-task budget):
+callback = ClampAICrewCallback(
+    budget=100.0,
+    cost_per_step=1.0,
+    invariants=[rate_limit_invariant("steps", max_count=50)],
+)
+
+crew = Crew(
+    agents=[...],
+    tasks=[...],
+    step_callback=callback.step_callback,
+    task_callback=callback.task_callback,
+)
+```
+
+### AutoGen
+
+`pip install pyautogen`
+
+**`ClampAISafeAutoGenAgent`** wraps any AutoGen reply function with budget and invariant enforcement. **`autogen_reply_fn`** is the decorator form.
+
+```python
+from clampai.adapters import autogen_reply_fn, ClampAISafeAutoGenAgent
+from clampai.invariants import rate_limit_invariant
+
+# Decorator form:
+@autogen_reply_fn(budget=50.0, cost_per_reply=2.0, agent_name="researcher",
+                  invariants=[rate_limit_invariant("messages", max_count=20)])
+def my_reply_fn(recipient, messages, sender, config):
+    return True, generate_reply(messages)
+
+# Register with AutoGen:
+agent = ConversableAgent("researcher")
+agent.register_reply(
+    [ConversableAgent, None],
+    my_reply_fn,
+)
+
+# Standalone gate (check before sending a message):
+safe_fn = ClampAISafeAutoGenAgent(
+    my_reply_fn, budget=50.0, cost_per_reply=1.0
+)
+safe_fn.check(message="run the deployment script", sender=agent)
+```
+
+### HTTP Sidecar Server
+
+Run ClampAI as a standalone HTTP service. Any language or runtime can enforce the same budget and invariant guarantees via simple JSON requests — no Python required in the agent process.
+
+```bash
+# Start the server (zero external dependencies beyond ClampAI):
+python -m clampai.server --budget 1000.0 --port 8765
+# ClampAI sidecar server listening on http://127.0.0.1:8765
+```
+
+```python
+from clampai.server import ClampAIServer
+from clampai.invariants import rate_limit_invariant, pii_guard_invariant
+
+server = ClampAIServer(
+    budget=1000.0,
+    invariants=[
+        rate_limit_invariant("api_calls", 200),
+        pii_guard_invariant("output"),
+    ],
+    port=8765,
+)
+server.start_background()   # non-blocking; server.stop() to shut down
+
+# Any HTTP client can now evaluate/execute actions:
+# POST /evaluate  → {"approved": true, "budget_remaining": 999.0}
+# POST /execute   → {"approved": true, "new_state": {...}, "step_count": 1}
+# GET  /status    → {"budget_remaining": 999.0, "step_count": 1}
+# POST /reset     → {"status": "ok", "budget_remaining": 1000.0}
+```
+
+```bash
+# From any language:
+curl -s -X POST http://127.0.0.1:8765/execute \
+  -H 'Content-Type: application/json' \
+  -d '{"state": {"api_calls": 5}, "action": {"id": "call_api", "name": "Call API",
+       "description": "API call", "cost": 1.0, "effects": [], "reversible": false}}'
+# → {"approved": true, "new_state": {"api_calls": 5}, "step_count": 1, ...}
 ```
 
 ---
@@ -694,7 +922,7 @@ The safety kernel makes eight claims. Here is what each means, without notation.
 
 ### Guarantee taxonomy
 
-Every claim in ConstrAI carries one of four epistemic labels:
+Every claim in ClampAI carries one of four epistemic labels:
 
 | Label | Meaning |
 |-------|---------|
@@ -703,7 +931,7 @@ Every claim in ConstrAI carries one of four epistemic labels:
 | `EMPIRICAL` | Measured on test suites; confidence intervals available |
 | `HEURISTIC` | Best-effort; no formal guarantee (gradient tracker, HJB barrier) |
 
-T1, T3, T4, T5, T6, T7 are `PROVEN`. T2 and T8 are `CONDITIONAL`. See [MATHEMATICAL_COMPLIANCE.md](https://github.com/Ambar-13/ConstrAI/blob/main/MATHEMATICAL_COMPLIANCE.md) for the full proofs.
+T1, T3, T4, T5, T6, T7 are `PROVEN`. T2 and T8 are `CONDITIONAL`. See [MATHEMATICAL_COMPLIANCE.md](https://github.com/Ambar-13/ClampAI/blob/main/MATHEMATICAL_COMPLIANCE.md) for the full proofs.
 
 ### What is and is not guaranteed for real-world actions
 
@@ -722,7 +950,7 @@ NOT APPLICABLE is not a bug — the kernel can only simulate and invert effects 
 
 ## Architecture
 
-ConstrAI has four layers. Each layer can only constrain the layers above it — not bypass them.
+ClampAI has four layers. Each layer can only clampain the layers above it — not bypass them.
 
 ```
 ┌─────────────────────────────────────────────────────┐
@@ -767,7 +995,7 @@ ConstrAI has four layers. Each layer can only constrain the layers above it — 
 Tag state fields with security levels and block actions that would write high-security data to a lower-security field.
 
 ```python
-from constrai import DataLabel, SecurityLevel, ReferenceMonitor
+from clampai import DataLabel, SecurityLevel, ReferenceMonitor
 
 monitor = ReferenceMonitor()
 monitor.set_ifc_label("user_email", DataLabel(SecurityLevel.PII))
@@ -781,7 +1009,7 @@ Security levels form a lattice: `PUBLIC ⊑ INTERNAL ⊑ PII ⊑ SECRET`. Inform
 Add a mathematical barrier that limits how quickly the state can move toward unsafe regions.
 
 ```python
-from constrai import ReferenceMonitor
+from clampai import ReferenceMonitor
 
 monitor = ReferenceMonitor()
 # h(s) > 0 means "safe". alpha controls how fast h may decrease per step.
@@ -793,7 +1021,7 @@ monitor.add_cbf(h=lambda s: 1.0 - s.get("risk", 0.0), alpha=0.1)
 If you build a pipeline from separately verified tasks, you can compose their contracts:
 
 ```python
-from constrai import OperadicComposition, ContractSpecification
+from clampai import OperadicComposition, ContractSpecification
 
 spec_a = ContractSpecification(name="fetch", assume=..., guarantee=...)
 spec_b = ContractSpecification(name="process", assume=..., guarantee=...)
@@ -819,18 +1047,19 @@ restored = kernel.rollback(state, new_state, reversible_action)
 | Issue | Status |
 |-------|--------|
 | Spec-reality gap: proofs hold on the formal model, not on what code does in the world | Partially mitigated by `EnvironmentReconciler` |
+| No text-layer safety: ClampAI does not do prompt injection detection, toxicity filtering, or jailbreak prevention | By design — use NeMo Guardrails or LLM Guard alongside ClampAI |
 | Multi-process budget sharing | `ProcessSharedBudgetController` uses `multiprocessing.Value` (shared memory, int64) for cross-process budget enforcement. T1 and T4 guarantees are preserved across OS processes. Cross-machine multi-agent is not supported. |
 | Subjective goals ("write good code", "be helpful") | No formal predicate is possible. Use `MultiDimensionalAttestor`. |
 | Deep Python memory manipulation (`ctypes`, `gc`, `sys`) | Partially mitigated. Not memory-safe against intentional bypasses. |
 | 4 adversarial evasion vectors (base64 payloads, `getattr` dynamic dispatch) | These bypass the classification layer before an `ActionSpec` is constructed. The kernel itself has no known bypass. |
 
-See [docs/VULNERABILITIES.md](https://github.com/Ambar-13/ConstrAI/blob/main/docs/VULNERABILITIES.md) for the full breakdown.
+See [docs/VULNERABILITIES.md](https://github.com/Ambar-13/ClampAI/blob/main/docs/VULNERABILITIES.md) for the full breakdown.
 
 ---
 
 ## Performance
 
-Measured on 10,000 sequential safety checks in a single process (see [BENCHMARKS.md](https://github.com/Ambar-13/ConstrAI/blob/main/BENCHMARKS.md) for methodology):
+Measured on 10,000 sequential safety checks in a single process (see [BENCHMARKS.md](https://github.com/Ambar-13/ClampAI/blob/main/BENCHMARKS.md) for methodology):
 
 | Metric | Value |
 |--------|-------|
@@ -846,9 +1075,9 @@ The 89.7% recall is honest: 4 of the 39 attack vectors evade classification befo
 
 ## FAQ
 
-**Does ConstrAI prevent the LLM from making bad decisions?**
+**Does ClampAI prevent the LLM from making bad decisions?**
 
-No. ConstrAI prevents bad decisions from executing. The LLM can propose anything — the kernel only approves actions that fit within the declared budget and invariants. If the LLM's decisions are consistently wrong, that is a prompting or model quality problem that ConstrAI cannot fix.
+No. ClampAI prevents bad decisions from executing. The LLM can propose anything — the kernel only approves actions that fit within the declared budget and invariants. If the LLM's decisions are consistently wrong, that is a prompting or model quality problem that ClampAI cannot fix.
 
 ---
 
@@ -873,7 +1102,7 @@ Yes, fully. Both the kernel and the orchestrator have native async implementatio
 **`AsyncSafetyKernel`** — drop-in async kernel. `evaluate()` and `execute_atomic()` are coroutines; the internal lock is `asyncio.Lock` so concurrent coroutines yield to the event loop rather than blocking OS threads. All T1–T8 guarantees are preserved.
 
 ```python
-from constrai import AsyncSafetyKernel
+from clampai import AsyncSafetyKernel
 
 kernel = AsyncSafetyKernel(budget=10.0, invariants=[])
 verdict = await kernel.evaluate(state, action)
@@ -885,8 +1114,8 @@ new_state, entry = await kernel.execute_atomic(state, action)
 ```python
 import asyncio
 import anthropic
-from constrai import AsyncOrchestrator, AsyncSafetyKernel
-from constrai.adapters import AsyncAnthropicAdapter
+from clampai import AsyncOrchestrator, AsyncSafetyKernel
+from clampai.adapters import AsyncAnthropicAdapter
 
 # Single agent.
 engine = AsyncOrchestrator(
@@ -915,7 +1144,7 @@ Set `max_eval_ms=N` on the invariant. If the predicate exceeds the timeout, the 
 
 **Can the LLM reason its way around the kernel?**
 
-The kernel reads only the `ActionSpec` and the `State` — not any text in the reasoning summary. Injected instructions in text fields are stored in the audit log but never evaluated. The realistic risk is the spec-reality gap: an `ActionSpec` with missing effects cannot be constrained by invariants that do not know about those effects.
+The kernel reads only the `ActionSpec` and the `State` — not any text in the reasoning summary. Injected instructions in text fields are stored in the audit log but never evaluated. The realistic risk is the spec-reality gap: an `ActionSpec` with missing effects cannot be clampained by invariants that do not know about those effects.
 
 ---
 
@@ -938,6 +1167,8 @@ print(verdict.rejection_reasons)  # ("Cannot afford $3.00: ...", "Invariant 'rat
 | `03_invariants.py` | Custom and pre-built invariants, blocking vs monitoring |
 | `04_orchestrator.py` | Full `TaskDefinition` → `Orchestrator` pipeline |
 | `05_safe_patterns.py` | `@safe` patterns: basic, `state_fn`, pipeline, reset |
+| `06_langgraph_agent.py` | LangGraph: `@clampai_node`, `budget_guard`, `invariant_guard` |
+| `07_fastapi_middleware.py` | FastAPI: `ClampAIMiddleware` — budget + invariant enforcement on HTTP requests |
 | `email_safety.py` | Adversarial email-deletion demo; run with `--kernel-only` |
 | `multi_agent_shared_kernel.py` | 8 concurrent agents sharing one safety kernel |
 
@@ -946,14 +1177,14 @@ print(verdict.rejection_reasons)  # ("Cannot afford $3.00: ...", "Invariant 'rat
 ## Running tests
 
 ```bash
-pip install constrai[dev]
+pip install clampai[dev]
 pytest tests/ -v
 ```
 
 Key test files:
 
 ```bash
-pytest tests/test_constrai.py              # T1–T8 theorem unit tests
+pytest tests/test_clampai.py              # T1–T8 theorem unit tests
 pytest tests/test_monte_carlo.py           # 1,000 random tasks
 python tests/chaos_fuzzer.py               # 45 adversarial attack scenarios (standalone script)
 pytest tests/test_api.py                   # @safe decorator
@@ -968,7 +1199,7 @@ pytest tests/test_reference_monitor_coverage.py
 ## Project structure
 
 ```
-constrai/
+clampai/
 ├── formal.py               # Layer 0: safety kernel (T1–T8)
 ├── reasoning.py            # Layer 1: Bayesian beliefs, action valuation, LLM interface
 ├── orchestrator.py         # Layer 2: main execution loop
@@ -985,14 +1216,27 @@ constrai/
 ├── saliency.py             # Prompt saliency engine
 ├── verification_log.py     # Proof record writer
 ├── api.py                  # @safe decorator
-└── __init__.py             # Public API
+├── server.py               # HTTP sidecar server (zero-dep; python -m clampai.server)
+├── adapters/
+│   ├── anthropic_adapter.py
+│   ├── openai_adapter.py
+│   ├── openclaw_adapter.py
+│   ├── langchain_tool.py
+│   ├── langchain_callback.py  # ClampAICallbackHandler (any LangChain agent)
+│   ├── langgraph_adapter.py   # LangGraph node and edge safety
+│   ├── fastapi_middleware.py  # FastAPI/Starlette request middleware
+│   ├── crewai_adapter.py      # CrewAI tool and callback adapters
+│   ├── autogen_adapter.py     # AutoGen reply function wrapper
+│   ├── mcp_server.py
+│   └── metrics.py             # Prometheus + OpenTelemetry backends (+ OTelTraceExporter)
+└── __init__.py              # Public API
 docs/
 ├── ARCHITECTURE.md
 ├── THEOREMS.md
 ├── VULNERABILITIES.md
 └── API.md
 tests/
-├── test_constrai.py
+├── test_clampai.py
 ├── test_monte_carlo.py
 ├── chaos_fuzzer.py
 ├── test_api.py
@@ -1014,12 +1258,12 @@ SECURITY.md
 ## Citation
 
 ```bibtex
-@misc{ambar2026constrai,
-    title  = {ConstrAI: Formal safety framework for AI agents},
+@misc{ambar2026clampai,
+    title  = {ClampAI: Formal safety framework for AI agents},
     author = {Ambar},
     year   = {2026},
-    url    = {https://github.com/Ambar-13/ConstrAI},
-    note   = {Version 0.4.0}
+    url    = {https://github.com/Ambar-13/ClampAI},
+    note   = {Version 1.0.0}
 }
 ```
 

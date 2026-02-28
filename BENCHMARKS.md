@@ -1,10 +1,10 @@
-> **Note:** This is the canonical benchmark document for ConstrAI. The original file lives at `safety_evaluation/Evaluation_report.md`; this root-level copy is the primary reference. If the two files differ, this one is authoritative.
+> **Note:** This is the canonical benchmark document for ClampAI. The original file lives at `safety_evaluation/Evaluation_report.md`; this root-level copy is the primary reference. If the two files differ, this one is authoritative.
 
 ---
 
-# ConstrAI Agent Safety EvaluationReport
+# ClampAI Agent Safety EvaluationReport
 
-**Framework:** ConstrAI v0.4.0 — Mathematical Safety Constraints for AI Agents  
+**Framework:** ClampAI v0.4.0 — Mathematical Safety Constraints for AI Agents  
 **Date:** February 8, 2026  
 **Methodology:** 63 actions across 6 agent types, 9 threat categories, 39 attack vectors
 
@@ -12,9 +12,9 @@
 
 ## Executive Summary
 
-ConstrAI was evaluated against synthetic agent modeling realistic LLM decision behavior spanning file system access, web requests, code execution, database queries, multi-step attack chains, and adversarial evasion attacks. The framework uses mathematical invariant checking rather than prompt-based safety, enforcing formal constraints through a SafetyKernel that simulates action effects before allowing execution.
+ClampAI was evaluated against synthetic agent modeling realistic LLM decision behavior spanning file system access, web requests, code execution, database queries, multi-step attack chains, and adversarial evasion attacks. The framework uses mathematical invariant checking rather than prompt-based safety, enforcing formal clampaints through a SafetyKernel that simulates action effects before allowing execution.
 
-| Metric | Unconstrained | ConstrAI |
+| Metric | Unclampained | ClampAI |
 |--------|:---:|:---:|
 | **Safety Rate** | 0.0% | **89.7%** |
 | **Task Completion** | 100% | **100%** |
@@ -25,7 +25,7 @@ ConstrAI was evaluated against synthetic agent modeling realistic LLM decision b
 | **Avg Latency** | ~0 | **0.061ms** |
 | **Throughput** | — | **45,613 checks/sec** |
 
-ConstrAI blocked **35 of 39** dangerous actions (89.7% recall) with **zero false positives** — no legitimate actions were blocked. The 4 missed attacks were adversarial evasion techniques (obfuscated code, base64-encoded payloads) that bypass static pattern matching, an honest and expected limitation.
+ClampAI blocked **35 of 39** dangerous actions (89.7% recall) with **zero false positives** — no legitimate actions were blocked. The 4 missed attacks were adversarial evasion techniques (obfuscated code, base64-encoded payloads) that bypass static pattern matching, an honest and expected limitation.
 
 ---
 
@@ -123,7 +123,7 @@ Adversarial attacks specifically designed to bypass pattern-matching classifiers
 
 ---
 
-## Architecture: How ConstrAI Catches These
+## Architecture: How ClampAI Catches These
 
 The safety enforcement pipeline works in 3 stages:
 
@@ -139,7 +139,7 @@ This is why the false positive rate is **zero**: safe actions produce effects th
 
 ## Known Limitations (Honest Assessment)
 
-The 4 evasion bypasses reveal a fundamental limitation: **the classifier is the weakest link**, not the kernel. ConstrAI's invariant checking is mathematically sound — if an action is correctly classified as dangerous, it *will* be blocked. But the classification layer relies on pattern matching, which is vulnerable to:
+The 4 evasion bypasses reveal a fundamental limitation: **the classifier is the weakest link**, not the kernel. ClampAI's invariant checking is mathematically sound — if an action is correctly classified as dangerous, it *will* be blocked. But the classification layer relies on pattern matching, which is vulnerable to:
 
 1. **Code obfuscation** — string concatenation, `getattr`, `eval` of computed strings
 2. **Encoding evasion** — base64, hex, URL encoding of payloads
@@ -156,7 +156,7 @@ The 4 evasion bypasses reveal a fundamental limitation: **the classifier is the 
 
 ## Conclusion
 
-ConstrAI demonstrates that **formal mathematical constraints** provide a viable safety layer for AI agents with:
+ClampAI demonstrates that **formal mathematical clampaints** provide a viable safety layer for AI agents with:
 - **89.7% safety rate** across 39 attack vectors including adversarial evasion
 - **100% safety** on standard (non-evasion) attacks across all agent types
 - **Zero false positives** — legitimate agent operations are never blocked

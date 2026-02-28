@@ -1,11 +1,11 @@
-# Contributing to ConstrAI
+# Contributing to ClampAI
 
-Thank you for your interest in contributing.  ConstrAI is a formal safety
+Thank you for your interest in contributing.  ClampAI is a formal safety
 framework, so correctness matters more than velocity.  Read this guide before
 opening a pull request.
 
 **Maintainer:** Ambar — ambar13@u.nus.edu  
-**Repository:** https://github.com/Ambar-13/ConstrAI
+**Repository:** https://github.com/Ambar-13/ClampAI
 
 ---
 
@@ -26,8 +26,8 @@ opening a pull request.
 
 ```bash
 # 1. Fork then clone your fork.
-git clone https://github.com/YOUR_USERNAME/ConstrAI.git
-cd ConstrAI
+git clone https://github.com/YOUR_USERNAME/ClampAI.git
+cd ClampAI
 
 # 2. Create a virtual environment (optional but recommended).
 python -m venv .venv
@@ -52,7 +52,7 @@ You do not need any LLM API keys to run the core tests — the built-in
 pytest tests/ -v --tb=short
 
 # Individual suites:
-pytest tests/test_constrai.py            # T1-T8 unit tests
+pytest tests/test_clampai.py            # T1-T8 unit tests
 pytest tests/test_monte_carlo.py         # 1,000-run probabilistic validation
 pytest tests/test_composition.py         # Operadic composition verification
 pytest tests/test_integration.py         # End-to-end orchestrator scenarios
@@ -63,7 +63,7 @@ pytest tests/test_boundary_enforcement.py
 python tests/chaos_fuzzer.py
 
 # With coverage:
-pytest tests/ -v --cov=constrai --cov-report=term-missing
+pytest tests/ -v --cov=clampai --cov-report=term-missing
 ```
 
 All tests must pass before a PR will be merged.  No exceptions.
@@ -149,15 +149,15 @@ existing patterns in the file you are editing:
 
 ## Adding invariants to the pre-built library
 
-ConstrAI ships with several ready-to-use `Invariant` constructors (see
-`constrai/invariants.py`).  To add a new one:
+ClampAI ships with several ready-to-use `Invariant` constructors (see
+`clampai/invariants.py`).  To add a new one:
 
 1. **Write the predicate as a pure function** — no I/O, no randomness, no
    global state.  The predicate receives a `dict`-like `State` and must return
    a `bool`.  Slow predicates block the kernel; keep them O(1) or O(n) with
    a small, bounded n.
 
-2. **Add a constructor function** in `constrai/invariants.py`:
+2. **Add a constructor function** in `clampai/invariants.py`:
 
    ```python
    def max_retries_invariant(
@@ -183,9 +183,9 @@ ConstrAI ships with several ready-to-use `Invariant` constructors (see
        )
    ```
 
-3. **Export it** from `constrai/invariants.py` — add the function name to `__all__` at the top of that file.
+3. **Export it** from `clampai/invariants.py` — add the function name to `__all__` at the top of that file.
 
-4. **Add a unit test** in `tests/test_constrai.py` covering:
+4. **Add a unit test** in `tests/test_clampai.py` covering:
    - The invariant passes on valid states.
    - The invariant blocks actions that would violate it (T3 check).
    - The state is unchanged after rejection (T5 check).
@@ -255,8 +255,8 @@ deep knowledge of the formal kernel:
 
 **Do:**
 
-- Add tests for every new feature.  If it lives in `constrai/`, it needs a test.
-- Keep the zero-dependency constraint for core.  External dependencies belong
+- Add tests for every new feature.  If it lives in `clampai/`, it needs a test.
+- Keep the zero-dependency clampaint for core.  External dependencies belong
   in optional extras (`extras_require` / `[project.optional-dependencies]`).
 - Be honest about guarantee levels.  `EMPIRICAL` is fine; calling it `PROVEN`
   when it is not is not.

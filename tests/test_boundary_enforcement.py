@@ -8,7 +8,7 @@ Tests verify:
 
 import pytest
 
-from constrai import (
+from clampai import (
     ActionSpec,
     AuthoritativeHJBBarrier,
     BoundarySeverity,
@@ -50,7 +50,7 @@ class TestJacobianFusion:
 
         assert not report.safety_barrier_violated
         assert "x" not in report.critical_variables
-        assert report.recommendation == "OK: Safe state; all constraints well within margins"
+        assert report.recommendation == "OK: Safe state; all clampaints well within margins"
         print("Jacobian correctly detects safe, distant state")
 
     def test_jacobian_danger_zone(self):
@@ -86,7 +86,7 @@ class TestJacobianFusion:
         print("TEST: Jacobian Forcing Critical Variables into Prompt")
         print("="*70)
 
-        from constrai import SaliencyEngine
+        from clampai import SaliencyEngine
 
         invariants = [
             Invariant("x_limit", lambda s: s.get("x", 0) <= 100, "x must be ≤ 100"),
@@ -226,7 +226,7 @@ class TestOperadicComposition:
         print("TEST: SuperTask Creation with Verification")
         print("="*70)
 
-        from constrai.formal import GuaranteeLevel
+        from clampai.formal import GuaranteeLevel
 
         cert = VerificationCertificate(
             task_id="task_1",
@@ -270,7 +270,7 @@ class TestOperadicComposition:
         print("TEST: Compatible Task Composition")
         print("="*70)
 
-        from constrai.formal import GuaranteeLevel
+        from clampai.formal import GuaranteeLevel
 
         cert1 = VerificationCertificate(
             task_id="task_add",
@@ -348,7 +348,7 @@ class TestOperadicComposition:
         print("TEST: Incompatible Task Composition Rejected")
         print("="*70)
 
-        from constrai.formal import GuaranteeLevel
+        from clampai.formal import GuaranteeLevel
 
         cert1 = VerificationCertificate(
             task_id="task_1",
@@ -416,7 +416,7 @@ class TestOperadicComposition:
         print("TEST: TaskComposer Library Management")
         print("="*70)
 
-        from constrai.formal import GuaranteeLevel
+        from clampai.formal import GuaranteeLevel
 
         composer = TaskComposer()
 

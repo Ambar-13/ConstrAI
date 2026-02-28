@@ -12,8 +12,8 @@ from typing import Any
 
 import pytest
 
-from constrai.formal import ActionSpec, Effect, GuaranteeLevel, State
-from constrai.reference_monitor import ControlBarrierFunction, QPProjector, ReferenceMonitor
+from clampai.formal import ActionSpec, Effect, GuaranteeLevel, State
+from clampai.reference_monitor import ControlBarrierFunction, QPProjector, ReferenceMonitor
 
 
 class TestEffectInverse:
@@ -217,7 +217,7 @@ class TestQPNudging:
         assert repaired == action.effects
 
     def test_qp_project_effect_parameters_nudge_down(self):
-        """QP: nudge spend amount from 100 down to 50 (budget constraint)."""
+        """QP: nudge spend amount from 100 down to 50 (budget clampaint)."""
         original_effects = (Effect("balance", "decrement", 100),)
         safe_values = {"balance": 50}  # Safe to spend only 50
 
@@ -249,7 +249,7 @@ class TestQPNudging:
         safe_effect_values = {"balance": 50}
 
         repaired_action, was_changed = projector.project_action(
-            action, state, constraints=[],
+            action, state, clampaints=[],
             safe_effect_values=safe_effect_values
         )
 
@@ -442,7 +442,7 @@ class TestBackwardCompatibility:
 
         # Call without safe_effect_values (old API)
         repaired, _was_changed = projector.project_action(
-            action, state, constraints=[]
+            action, state, clampaints=[]
         )
 
         # Should work fine, just no effect parameter repair

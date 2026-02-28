@@ -5,7 +5,7 @@
 The typical usage pattern:
 
 ```python
-from constrai import (
+from clampai import (
     State, ActionSpec, Effect, Invariant,
     TaskDefinition, Orchestrator,
 )
@@ -129,15 +129,15 @@ Invariant(
 
 ---
 
-## Pre-built Invariants (`constrai.invariants`)
+## Pre-built Invariants (`clampai.invariants`)
 
 Twenty-five ready-to-use factory functions. All predicates are pure (no I/O,
 no global state) and fail-safe: exceptions count as violations rather than
 letting unsafe states through.
 
 ```python
-from constrai.invariants import rate_limit_invariant, pii_guard_invariant
-# or: from constrai import rate_limit_invariant  (all 25 are top-level exports)
+from clampai.invariants import rate_limit_invariant, pii_guard_invariant
+# or: from clampai import rate_limit_invariant  (all 25 are top-level exports)
 ```
 
 All factories share two common keyword-only parameters:
@@ -318,7 +318,7 @@ TaskDefinition(
 - `goal_progress_fn`: `lambda state: float` — optional progress estimate in `[0, 1]`.
 - `dependencies`: `{"action_b": [("action_a", "reason")], ...}` — DAG edges.
 - `priors`: `{"action:my_action:succeeds": (alpha, beta)}` — initial Beta priors.
-- `proof_path`: Path to write a `.constrai_proof` JSON artifact at the end.
+- `proof_path`: Path to write a `.clampai_proof` JSON artifact at the end.
 - `capture_basins`: Forbidden state regions for HJB barrier.
 
 ---
@@ -387,11 +387,11 @@ class MyLLM:
         ...
 ```
 
-Pass an instance as `Orchestrator(task, llm=MyLLM())`. The adapter does one thing: take a prompt string, return a response string. All structured parsing happens in ConstrAI.
+Pass an instance as `Orchestrator(task, llm=MyLLM())`. The adapter does one thing: take a prompt string, return a response string. All structured parsing happens in ClampAI.
 
 ---
 
-## Hardening (`constrai.hardening`)
+## Hardening (`clampai.hardening`)
 
 ### `SubprocessAttestor`
 
@@ -439,7 +439,7 @@ MultiDimensionalAttestor(
 
 ---
 
-## Reference Monitor (`constrai.reference_monitor`)
+## Reference Monitor (`clampai.reference_monitor`)
 
 ### `ReferenceMonitor`
 
@@ -469,7 +469,7 @@ CaptureBasin(name: str, is_bad: Callable[[State], bool], max_steps: int = 3)
 
 ---
 
-## Operadic Composition (`constrai.operadic_composition`)
+## Operadic Composition (`clampai.operadic_composition`)
 
 ### `InterfaceSignature`
 
@@ -497,7 +497,7 @@ TaskComposer()
 
 ---
 
-## Guarantee levels (`constrai.formal`)
+## Guarantee levels (`clampai.formal`)
 
 ```python
 GuaranteeLevel.PROVEN       # Holds unconditionally by construction

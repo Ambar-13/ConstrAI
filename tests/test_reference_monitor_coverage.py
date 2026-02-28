@@ -1,5 +1,5 @@
 """
-Tests for constrai.reference_monitor coverage:
+Tests for clampai.reference_monitor coverage:
   DataLabel algebra, ControlBarrierFunction, CaptureBasin,
   ContractSpecification, OperadicComposition, SafeHoverState,
   ReferenceMonitor registration.
@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import pytest
 
-from constrai import (
+from clampai import (
     ActionSpec,
     CaptureBasin,
     ContractSpecification,

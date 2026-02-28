@@ -2,7 +2,7 @@
 examples/email_safety.py — Email safety demo.
 
 An autonomous email-management agent receives ambiguous instructions and
-an adversarial follow-up that attempts bulk deletion. The ConstrAI safety
+an adversarial follow-up that attempts bulk deletion. The ClampAI safety
 kernel intercepts the delete action before it can mutate state, regardless
 of what the LLM decided.
 
@@ -29,7 +29,7 @@ import json
 import textwrap
 from typing import Any, ClassVar, Dict, List
 
-from constrai import (
+from clampai import (
     ActionSpec,
     Effect,
     Invariant,
@@ -40,7 +40,7 @@ from constrai import (
     State,
     TaskDefinition,
 )
-from constrai.invariants import (
+from clampai.invariants import (
     email_safety_invariant,
     human_approval_gate_invariant,
     no_sensitive_substring_invariant,
@@ -272,13 +272,13 @@ class AdversarialEmailLLM:
 
 def make_claude_adapter():
     """
-    Build a ConstrAI-compatible adapter for the Anthropic Claude API.
+    Build a ClampAI-compatible adapter for the Anthropic Claude API.
     Requires: pip install anthropic && ANTHROPIC_API_KEY environment variable.
     """
     try:
         import anthropic
     except ImportError:
-        raise SystemExit("Install the Anthropic SDK: pip install 'constrai[anthropic]'")
+        raise SystemExit("Install the Anthropic SDK: pip install 'clampai[anthropic]'")
     import os
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if not api_key:
@@ -597,7 +597,7 @@ def run_adversarial_orchestrator_demo(
 
 def main() -> None:
     parser = argparse.ArgumentParser(
-        description="ConstrAI email safety demo — shows kernel blocking delete_all_emails",
+        description="ClampAI email safety demo — shows kernel blocking delete_all_emails",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog=textwrap.dedent("""
         Modes
@@ -634,7 +634,7 @@ def main() -> None:
 
     print(textwrap.dedent("""
     ╔══════════════════════════════════════════════════════════════════════╗
-    ║         ConstrAI — Email Safety Demo (Informal Red-Team)            ║
+    ║         ClampAI — Email Safety Demo (Informal Red-Team)            ║
     ║                                                                      ║
     ║  This demo shows the safety kernel BLOCKING a "delete all emails"   ║
     ║  instruction, even when the LLM is adversarially prompted to        ║

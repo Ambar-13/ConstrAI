@@ -9,7 +9,7 @@ Run:
     python examples/02_budget_enforcement.py
 """
 
-from constrai import (
+from clampai import (
     ActionSpec,
     Effect,
     Invariant,

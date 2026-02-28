@@ -14,9 +14,9 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
-from constrai.adapters.anthropic_adapter import AsyncAnthropicAdapter
-from constrai.adapters.openai_adapter import AsyncOpenAIAdapter
-from constrai.formal import (
+from clampai.adapters.anthropic_adapter import AsyncAnthropicAdapter
+from clampai.adapters.openai_adapter import AsyncOpenAIAdapter
+from clampai.formal import (
     ActionSpec,
     AsyncSafetyKernel,
     BudgetController,
@@ -26,7 +26,7 @@ from constrai.formal import (
     ProcessSharedBudgetController,
     State,
 )
-from constrai.reasoning import MockLLMAdapter
+from clampai.reasoning import MockLLMAdapter
 
 # ─── helpers ─────────────────────────────────────────────────────────────────
 

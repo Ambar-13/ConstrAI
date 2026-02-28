@@ -154,6 +154,3 @@ outputs/
 # Claude Code memory
 .claude/
 
-# AI-generated planning and evaluation files (not part of the package)
-FIRST_30_DAYS.md
-safety_evaluation/

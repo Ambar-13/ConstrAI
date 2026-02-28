@@ -4,11 +4,11 @@
 
 AI agents need to take actions in the real world. Those actions cost money, break things, and often can't be undone. Standard approaches fail in predictable ways:
 
-- **Prompt-only safety** — encode constraints in system prompts or callbacks; the model can reason past them and nothing is formally enforced at the execution layer.
-- **Rule-based constraints** — hardcode allowed actions; brittle, can't handle novel situations.
+- **Prompt-only safety** — encode clampaints in system prompts or callbacks; the model can reason past them and nothing is formally enforced at the execution layer.
+- **Rule-based clampaints** — hardcode allowed actions; brittle, can't handle novel situations.
 - **RLHF alignment** — shape what the model wants, not what it can do; training can drift.
 
-ConstrAI takes a different approach: the LLM reasons freely, but its decisions pass through a formal verification layer before anything executes. The LLM can't bypass the math. The math can't bypass the LLM. Both must agree.
+ClampAI takes a different approach: the LLM reasons freely, but its decisions pass through a formal verification layer before anything executes. The LLM can't bypass the math. The math can't bypass the LLM. Both must agree.
 
 **Safety overhead is zero tokens.** Constraints live in the execution loop, not in the context window. No system-prompt bloat.
 
@@ -92,7 +92,7 @@ This is where intelligence lives. The safety kernel is a cage; the reasoning eng
 
 ### Bayesian Beliefs
 
-For each action, ConstrAI tracks a Beta(α, β) distribution representing the probability that this action succeeds:
+For each action, ClampAI tracks a Beta(α, β) distribution representing the probability that this action succeeds:
 
 - `observe(True)`: α += 1
 - `observe(False)`: β += 1
@@ -190,7 +190,7 @@ These provide defence-in-depth between the reasoning layer and the formal kernel
 
 | Module | Guarantee | Purpose |
 |--------|-----------|---------|
-| `gradient_tracker.py` | HEURISTIC | Finite-difference Jacobian: which variables are near constraint boundaries? |
+| `gradient_tracker.py` | HEURISTIC | Finite-difference Jacobian: which variables are near clampaint boundaries? |
 | `active_hjb_barrier.py` | HEURISTIC | k-step lookahead: can the agent get trapped in a capture basin within k steps? |
 | `reference_monitor.py` | DETERMINISTIC | IFC lattice, CBF resource barriers, QP minimum-intervention repair |
 | `inverse_algebra.py` | PROVEN | Algebraic inverse effects for exact rollback (T7 realization) |
@@ -250,4 +250,4 @@ Steps: 4/50
 {"chosen_action_id": "...", "reasoning": "...", ...}
 ```
 
-The LLM isn't guessing. It's reasoning over computed quantities within formal constraints.
+The LLM isn't guessing. It's reasoning over computed quantities within formal clampaints.

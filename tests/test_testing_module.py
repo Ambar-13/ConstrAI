@@ -1,5 +1,5 @@
 """
-Tests for constrai.testing — SafetyHarness, make_state, make_action.
+Tests for clampai.testing — SafetyHarness, make_state, make_action.
 
 Covers: all public methods of SafetyHarness, both helper constructors,
 assertion success and failure paths, context manager protocol, reset,
@@ -9,14 +9,14 @@ from __future__ import annotations
 
 import pytest
 
-from constrai.formal import ActionSpec, Effect, State
-from constrai.invariants import (
+from clampai.formal import ActionSpec, Effect, State
+from clampai.invariants import (
     no_action_after_flag_invariant,
     no_delete_invariant,
     rate_limit_invariant,
     resource_ceiling_invariant,
 )
-from constrai.testing import SafetyHarness, make_action, make_state
+from clampai.testing import SafetyHarness, make_action, make_state
 
 # ─── make_state ────────────────────────────────────────────────────────────────
 
@@ -312,7 +312,7 @@ class TestSafetyHarnessContextManager:
 
     def test_kernel_property(self):
         with SafetyHarness(budget=5.0) as h:
-            from constrai.formal import SafetyKernel
+            from clampai.formal import SafetyKernel
             assert isinstance(h.kernel, SafetyKernel)
 
     def test_emergency_actions_passed(self):

@@ -1,5 +1,5 @@
 """
-Tests for constrai.guards — symbolic precondition expression parser and evaluator.
+Tests for clampai.guards — symbolic precondition expression parser and evaluator.
 
 Covers: tokenizer, parser, evaluator, compile_guard, evaluate_guard,
 and kernel_precondition_from_actions.  All code paths are exercised including
@@ -11,8 +11,8 @@ from typing import Optional
 
 import pytest
 
-from constrai.formal import State
-from constrai.guards import (
+from clampai.formal import State
+from clampai.guards import (
     GuardParseError,
     _tokenize,
     compile_guard,

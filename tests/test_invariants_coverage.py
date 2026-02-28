@@ -1,5 +1,5 @@
 """
-Tests for constrai.invariants — all 21 pre-built invariant factory functions.
+Tests for clampai.invariants — all 21 pre-built invariant factory functions.
 
 Exercises every factory, both the passing and failing state, and key edge
 cases (None values, monitoring mode, custom messages, missing keys).
@@ -8,8 +8,8 @@ from __future__ import annotations
 
 import pytest
 
-from constrai.formal import State
-from constrai.invariants import (
+from clampai.formal import State
+from clampai.invariants import (
     allowed_values_invariant,
     api_call_limit_invariant,
     custom_invariant,

@@ -1,10 +1,10 @@
 """Coverage boost tests targeting specific uncovered lines.
 
 Modules covered:
-  - constrai/saliency.py         (69% → 100%)
-  - constrai/verification_log.py (79% → 100%)
-  - constrai/safe_hover.py       (91% → ~100%)
-  - constrai/inverse_algebra.py  (81% → ~90%)
+  - clampai/saliency.py         (69% → 100%)
+  - clampai/verification_log.py (79% → 100%)
+  - clampai/safe_hover.py       (91% → ~100%)
+  - clampai/inverse_algebra.py  (81% → ~90%)
 
 Each test class is focused on one module.
 """
@@ -18,18 +18,18 @@ from unittest.mock import MagicMock
 
 import pytest
 
-from constrai.formal import _SENTINEL_DELETE, ActionSpec, Effect, State
-from constrai.inverse_algebra import (
+from clampai.formal import _SENTINEL_DELETE, ActionSpec, Effect, State
+from clampai.inverse_algebra import (
     InverseAlgebra,
     InverseEffect,
     RollbackRecord,
     action_with_inverse_guarantee,
 )
-from constrai.reasoning import ActionValue
-from constrai.reference_monitor import CaptureBasin
-from constrai.safe_hover import AuthoritativeHJBBarrier, SafeHoverSignal
-from constrai.saliency import SaliencyEngine, SaliencyResult
-from constrai.verification_log import ProofRecord, ProofStep, _sha256, write_proof
+from clampai.reasoning import ActionValue
+from clampai.reference_monitor import CaptureBasin
+from clampai.safe_hover import AuthoritativeHJBBarrier, SafeHoverSignal
+from clampai.saliency import SaliencyEngine, SaliencyResult
+from clampai.verification_log import ProofRecord, ProofStep, _sha256, write_proof
 
 # ---------------------------------------------------------------------------
 # Helpers

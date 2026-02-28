@@ -15,7 +15,7 @@ All claims are tagged with their epistemic status:
 
 ## Category 1: Foundational Theorems (T1–T8)
 
-The core "laws" of ConstrAI execution.
+The core "laws" of ClampAI execution.
 
 ### T1: Budget Safety (PROVEN)
 
@@ -192,7 +192,7 @@ Each task is verified once. Composition checks only interface compatibility. Re-
 
 ### JSF-1, JSF-2 — Boundary Sensitivity  `HEURISTIC`
 
-`GradientTracker` estimates which variables are near invariant boundaries via finite-difference perturbation. Diagnostic signal only; not safety enforcement. May miss nonlinear or cross-variable constraint interactions.
+`GradientTracker` estimates which variables are near invariant boundaries via finite-difference perturbation. Diagnostic signal only; not safety enforcement. May miss nonlinear or cross-variable clampaint interactions.
 
 ### AHJ-1, AHJ-2 — Active HJB Reachability  `HEURISTIC`
 

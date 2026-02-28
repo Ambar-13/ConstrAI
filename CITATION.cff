@@ -1,16 +1,16 @@
 cff-version: 1.2.0
-message: "If you use ConstrAI in your research, please cite it as below."
-title: "ConstrAI: Formal Safety Framework for AI Agents with Provable Guarantees"
+message: "If you use ClampAI in your research, please cite it as below."
+title: "ClampAI: Formal Safety Framework for AI Agents with Provable Guarantees"
 type: software
 authors:
   - given-names: Ambar
     affiliation: "National University of Singapore"
     orcid: ""
-version: "0.4.1"
-date-released: "2026-02-27"
+version: "1.0.0"
+date-released: "2026-02-28"
 license: MIT
-url: "https://github.com/Ambar-13/ConstrAI"
-repository-code: "https://github.com/Ambar-13/ConstrAI"
+url: "https://github.com/Ambar-13/ClampAI"
+repository-code: "https://github.com/Ambar-13/ClampAI"
 description: >-
   A formal safety framework for AI agents that enforces mathematical
   invariants through state-transition simulation rather than prompt-based
@@ -18,10 +18,10 @@ description: >-
   termination, invariant preservation, monotone resources, atomicity, trace
   integrity, rollback exactness, and emergency override) enforced by a
   non-bypassable safety kernel. Ships with 25 pre-built invariant factories,
-  LLM adapters for Anthropic, OpenAI, OpenClaw, LangChain, and MCP, and a
-  constrai.testing module for writing safety property tests. Evaluated
-  against 39 adversarial attack scenarios across 9 threat categories with
-  89.7% recall and zero false positives at sub-millisecond latency
+  LLM adapters for Anthropic, OpenAI, OpenClaw, LangChain, LangGraph, FastAPI,
+  and MCP, and a clampai.testing module for writing safety property tests.
+  Evaluated against 39 adversarial attack scenarios across 9 threat categories
+  with 89.7% recall and zero false positives at sub-millisecond latency
   (45,000+ checks/sec). Zero runtime dependencies.
 keywords:
   - ai-safety
@@ -30,6 +30,6 @@ keywords:
   - autonomous-agents
   - invariant-checking
   - llm-safety
-  - mathematical-constraints
+  - mathematical-clampaints
   - state-machines
   - execution-semantics

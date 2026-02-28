@@ -1,7 +1,7 @@
 """
 tests/chaos_fuzzer.py — Adversarial test harness for the safety kernel.
 
-Systematically attempts to break ConstrAI across twelve attack classes:
+Systematically attempts to break ClampAI across twelve attack classes:
 
   F1   Hallucinated actions (LLM proposes IDs not in the registered set)
   F2   Budget overflow (attempt to spend beyond the declared limit)
@@ -29,7 +29,7 @@ from typing import ClassVar, List
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from constrai import (
+from clampai import (
     ActionSpec,
     Belief,
     BeliefState,
@@ -46,7 +46,7 @@ from constrai import (
     TerminationReason,
     parse_llm_response,
 )
-from constrai.hardening import (
+from clampai.hardening import (
     AttestationGate,
     AttestationResult,
     DependencyDiscovery,

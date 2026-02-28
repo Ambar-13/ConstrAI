@@ -1,4 +1,4 @@
-"""ConstrAI Reference Monitor Example
+"""ClampAI Reference Monitor Example
 
 Complete working example showing:
 - Multi-layer safety enforcement (information flow control + safety barriers)
@@ -14,7 +14,7 @@ import sys
 
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from constrai import (
+from clampai import (
     ActionSpec,
     CaptureBasin,
     ContractSpecification,
@@ -261,7 +261,7 @@ def example_ifc_violation_detection():
     print("  EXAMPLE: IFC (Information Flow Control) Violation Detection")
     print("="*70)
 
-    from constrai import DataLabel, SecurityLevel
+    from clampai import DataLabel, SecurityLevel
 
     # Create labels
     pii_label = DataLabel(SecurityLevel.PII, tags={"ssn"})
@@ -313,7 +313,7 @@ def example_cbf_gradual_restriction():
     print("  EXAMPLE: Control Barrier Function (CBF) Resource Tightening")
     print("="*70)
 
-    from constrai import ControlBarrierFunction
+    from clampai import ControlBarrierFunction
 
     budget_limit = 100.0
     alpha = 0.3  # 30% tightening per step
