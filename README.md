@@ -108,7 +108,7 @@ When you give an LLM the ability to take real actions — send emails, write fil
 2. **The LLM violates a rule you declared.** "Never delete records", "never send more than 20 emails per hour", "stop if the error rate exceeds 5%" — these rules need to be enforced, not just stated in a prompt.
 3. **Something crashes mid-run and leaves state inconsistent.** An action was half-applied and you don't know what happened.
 
-Prompt engineering ("please don't do bad things") is not enforcement — the model can hallucinate past it. Post-hoc filtering fires after the damage. ClampAI enforces at the **execution layer**: the LLM produces a decision; the kernel decides whether it executes. The two are separate, and neither can override the other.
+Prompt engineering ("please don't do bad things") is not enforcement, the model can hallucinate past it. Post-hoc filtering fires after the damage. ClampAI enforces at the **execution layer**: the LLM produces a decision; the kernel decides whether it executes. The two are separate, and neither can override the other.
 
 ---
 
